@@ -7,3 +7,20 @@ venv/
 .ipynb_checkpoints/
 .idea/
 .vscode/
+
+# Backend
+backend/.venv/
+backend/.env
+*.egg-info/
+
+# Frontend
+node_modules/
+.next/
+frontend/.env.local
+frontend/.env
+
+# Databricks
+*_databricks_artifacts/
+
+# Sanity venv
+.venv-sanity/
