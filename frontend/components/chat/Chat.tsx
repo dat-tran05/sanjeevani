@@ -65,6 +65,18 @@ export function Chat() {
           excerpt: String(ev.data.excerpt),
         }]);
         break;
+      case "tool_call":
+        setTrace((t) => {
+          if (t.length === 0) return t;
+          const last = t[t.length - 1];
+          const toolBadge = `🔧 ${String(ev.data.name)}: ${String(ev.data.output_summary ?? "")}`;
+          const updated = {
+            ...last,
+            summary: last.summary ? `${last.summary}\n${toolBadge}` : toolBadge,
+          };
+          return [...t.slice(0, -1), updated];
+        });
+        break;
       case "error":
         setAnswer((s) => s + `\n\n[error] ${ev.data.message}`);
         break;

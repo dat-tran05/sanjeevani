@@ -9,6 +9,7 @@ dependencies = [
     "openai>=1.55",
     "databricks-sql-connector>=3.5",
     "langgraph>=1.0",
+    "langchain>=0.3",
     "langchain-core>=0.3",
     "mlflow>=3.0",
     "pydantic>=2.9",
