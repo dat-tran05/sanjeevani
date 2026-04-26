@@ -27,8 +27,7 @@ import uuid
 from pyspark.sql import functions as F
 
 raw_df = (
-    spark.read
-    .option("header", "true")
+    spark.read.option("header", "true")
     .option("multiLine", "true")
     .option("escape", '"')
     .csv(CSV_PATH)
@@ -37,15 +36,21 @@ raw_df = (
 # Add synthetic facility_id (deterministic hash so MERGE is stable across reruns)
 raw_with_id = raw_df.withColumn(
     "facility_id",
-    F.sha2(F.concat_ws("||", F.col("name"), F.col("address_line1"), F.col("address_zipOrPostcode")), 256)
+    F.sha2(
+        F.concat_ws(
+            "||", F.col("name"), F.col("address_line1"), F.col("address_zipOrPostcode")
+        ),
+        256,
+    ),
 )
 
 print(f"Loaded {raw_with_id.count()} rows")
 
-(raw_with_id.write
-    .mode("overwrite")
+(
+    raw_with_id.write.mode("overwrite")
     .option("overwriteSchema", "true")
-    .saveAsTable(f"{CATALOG}.bronze.facilities_raw"))
+    .saveAsTable(f"{CATALOG}.bronze.facilities_raw")
+)
 
 display(spark.sql(f"SELECT COUNT(*) AS n FROM {CATALOG}.bronze.facilities_raw"))
 
@@ -60,21 +65,75 @@ import json
 
 # Inline parser UDFs (mirroring databricks/lib/parsers.py — kept inline so notebook is self-contained)
 KNOWN_STATES = {
-    "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
-    "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
-    "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram",
-    "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
-    "Andaman and Nicobar Islands", "Chandigarh", "Delhi", "Jammu and Kashmir",
-    "Ladakh", "Lakshadweep", "Puducherry",
+    "Andhra Pradesh",
+    "Arunachal Pradesh",
+    "Assam",
+    "Bihar",
+    "Chhattisgarh",
+    "Goa",
+    "Gujarat",
+    "Haryana",
+    "Himachal Pradesh",
+    "Jharkhand",
+    "Karnataka",
+    "Kerala",
+    "Madhya Pradesh",
+    "Maharashtra",
+    "Manipur",
+    "Meghalaya",
+    "Mizoram",
+    "Nagaland",
+    "Odisha",
+    "Punjab",
+    "Rajasthan",
+    "Sikkim",
+    "Tamil Nadu",
+    "Telangana",
+    "Tripura",
+    "Uttar Pradesh",
+    "Uttarakhand",
+    "West Bengal",
+    "Andaman and Nicobar Islands",
+    "Chandigarh",
+    "Delhi",
+    "Jammu and Kashmir",
+    "Ladakh",
+    "Lakshadweep",
+    "Puducherry",
 }
 
 URBAN_CITIES = {
-    "Mumbai", "Delhi", "Bengaluru", "Bangalore", "Hyderabad", "Ahmedabad",
-    "Chennai", "Kolkata", "Surat", "Pune", "Jaipur", "Lucknow", "Kanpur",
-    "Nagpur", "Indore", "Thane", "Bhopal", "Visakhapatnam", "Patna",
-    "Vadodara", "Ghaziabad", "Ludhiana", "Agra", "Nashik", "Faridabad",
-    "Meerut", "Rajkot", "Varanasi", "Srinagar", "Coimbatore", "New Delhi",
+    "Mumbai",
+    "Delhi",
+    "Bengaluru",
+    "Bangalore",
+    "Hyderabad",
+    "Ahmedabad",
+    "Chennai",
+    "Kolkata",
+    "Surat",
+    "Pune",
+    "Jaipur",
+    "Lucknow",
+    "Kanpur",
+    "Nagpur",
+    "Indore",
+    "Thane",
+    "Bhopal",
+    "Visakhapatnam",
+    "Patna",
+    "Vadodara",
+    "Ghaziabad",
+    "Ludhiana",
+    "Agra",
+    "Nashik",
+    "Faridabad",
+    "Meerut",
+    "Rajkot",
+    "Varanasi",
+    "Srinagar",
+    "Coimbatore",
+    "New Delhi",
 }
 
 
@@ -96,6 +155,7 @@ def normalize_state_udf(raw):
     s = str(raw).strip()
     return s  # pass through; we already checked it's mostly clean
 
+
 @F.udf(returnType=BooleanType())
 def is_urban_udf(city):
     if city is None or city in ("", "null"):
@@ -105,47 +165,52 @@ def is_urban_udf(city):
 
 bronze = spark.table(f"{CATALOG}.bronze.facilities_raw")
 
-silver = (
-    bronze
-    .select(
-        F.col("facility_id"),
-        F.col("name"),
-        parse_array_udf(F.col("phone_numbers")).alias("phone_numbers"),
-        F.col("officialPhone").alias("official_phone"),
-        F.col("email"),
-        parse_array_udf(F.col("websites")).alias("websites"),
-        F.col("address_line1"),
-        F.col("address_line2"),
-        F.col("address_line3"),
-        F.col("address_city").alias("city"),
-        normalize_state_udf(F.col("address_stateOrRegion")).alias("state"),
-        F.col("address_zipOrPostcode").alias("pincode"),
-        F.lit(None).cast("string").alias("district"),  # deferred to later phase
-        is_urban_udf(F.col("address_city")).alias("is_urban"),
-        (~is_urban_udf(F.col("address_city"))).alias("is_rural"),
-        F.expr("try_cast(latitude AS DOUBLE)").alias("latitude"),
-        F.expr("try_cast(longitude AS DOUBLE)").alias("longitude"),
-        F.col("facilityTypeId").alias("facility_type"),
-        F.col("operatorTypeId").alias("operator_type"),
-        parse_array_udf(F.col("specialties")).alias("specialties"),
-        parse_array_udf(F.col("procedure")).alias("procedure_list"),
-        parse_array_udf(F.col("equipment")).alias("equipment_list"),
-        parse_array_udf(F.col("capability")).alias("capability_list"),
-        F.col("description"),
-        F.expr("try_cast(numberDoctors AS INT)").alias("number_doctors"),
-        F.expr("try_cast(capacity AS INT)").alias("capacity"),
-        F.col("recency_of_page_update"),
-        F.struct(
-            F.expr("try_cast(distinct_social_media_presence_count AS INT)").alias("social_count"),
-            (F.col("affiliated_staff_presence") == "TRUE").alias("affiliated_staff"),
-            (F.col("custom_logo_presence") == "TRUE").alias("custom_logo"),
-            F.expr("try_cast(number_of_facts_about_the_organization AS INT)").alias("num_facts"),
-            F.expr("try_cast(engagement_metrics_n_followers AS INT)").alias("followers"),
-            F.expr("try_cast(engagement_metrics_n_likes AS INT)").alias("likes"),
-            F.expr("try_cast(engagement_metrics_n_engagements AS INT)").alias("engagements"),
-            F.col("post_metrics_most_recent_social_media_post_date").alias("last_post_date"),
-        ).alias("trust_meta"),
-    )
+silver = bronze.select(
+    F.col("facility_id"),
+    F.col("name"),
+    parse_array_udf(F.col("phone_numbers")).alias("phone_numbers"),
+    F.col("officialPhone").alias("official_phone"),
+    F.col("email"),
+    parse_array_udf(F.col("websites")).alias("websites"),
+    F.col("address_line1"),
+    F.col("address_line2"),
+    F.col("address_line3"),
+    F.col("address_city").alias("city"),
+    normalize_state_udf(F.col("address_stateOrRegion")).alias("state"),
+    F.col("address_zipOrPostcode").alias("pincode"),
+    F.lit(None).cast("string").alias("district"),  # deferred to later phase
+    is_urban_udf(F.col("address_city")).alias("is_urban"),
+    (~is_urban_udf(F.col("address_city"))).alias("is_rural"),
+    F.expr("try_cast(latitude AS DOUBLE)").alias("latitude"),
+    F.expr("try_cast(longitude AS DOUBLE)").alias("longitude"),
+    F.col("facilityTypeId").alias("facility_type"),
+    F.col("operatorTypeId").alias("operator_type"),
+    parse_array_udf(F.col("specialties")).alias("specialties"),
+    parse_array_udf(F.col("procedure")).alias("procedure_list"),
+    parse_array_udf(F.col("equipment")).alias("equipment_list"),
+    parse_array_udf(F.col("capability")).alias("capability_list"),
+    F.col("description"),
+    F.expr("try_cast(numberDoctors AS INT)").alias("number_doctors"),
+    F.expr("try_cast(capacity AS INT)").alias("capacity"),
+    F.col("recency_of_page_update"),
+    F.struct(
+        F.expr("try_cast(distinct_social_media_presence_count AS INT)").alias(
+            "social_count"
+        ),
+        (F.col("affiliated_staff_presence") == "TRUE").alias("affiliated_staff"),
+        (F.col("custom_logo_presence") == "TRUE").alias("custom_logo"),
+        F.expr("try_cast(number_of_facts_about_the_organization AS INT)").alias(
+            "num_facts"
+        ),
+        F.expr("try_cast(engagement_metrics_n_followers AS INT)").alias("followers"),
+        F.expr("try_cast(engagement_metrics_n_likes AS INT)").alias("likes"),
+        F.expr("try_cast(engagement_metrics_n_engagements AS INT)").alias(
+            "engagements"
+        ),
+        F.col("post_metrics_most_recent_social_media_post_date").alias(
+            "last_post_date"
+        ),
+    ).alias("trust_meta"),
 )
 
 silver.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(
