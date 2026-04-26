@@ -46,15 +46,21 @@ def retriever_node(state: AgentState) -> AgentState:
 
     scored = []
     for r in rows:
-        emb = r.get("embedding") or []
-        sim = cosine(qvec, list(emb)) if emb else 0.0
+        # databricks-sql-connector returns ARRAY<FLOAT> as numpy arrays —
+        # use explicit None / len checks (truthiness raises for ndarrays >1).
+        emb = r.get("embedding")
+        if emb is None or len(emb) == 0:
+            sim = 0.0
+        else:
+            sim = cosine(qvec, list(emb))
+        caps = r.get("explicit_capabilities")
         scored.append(RetrievedFacility(
             facility_id=r["facility_id"],
             name=r["name"] or "",
             state=r.get("state"),
             city=r.get("city"),
             description=r.get("description"),
-            explicit_capabilities=list(r.get("explicit_capabilities") or []),
+            explicit_capabilities=list(caps) if caps is not None and len(caps) > 0 else [],
             similarity=sim,
         ))
 
