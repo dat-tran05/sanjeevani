@@ -144,20 +144,6 @@ function ExplorerInner() {
           {(showCards || liveExclusions) && (
             <WhyNotThese exclusions={liveExclusions} />
           )}
-
-          <div
-            style={{
-              marginTop: 28,
-              fontSize: 12,
-              color: "var(--fg-mute)",
-              fontFamily: "var(--mono)",
-              letterSpacing: "0.05em",
-              textAlign: "center",
-            }}
-          >
-            All claims sourced from delta.silver.facilities · jury verdicts from
-            gold.capability_verdicts
-          </div>
         </div>
       </div>
       <TraceStream events={events} totalExpected={16} />

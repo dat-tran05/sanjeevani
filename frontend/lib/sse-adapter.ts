@@ -410,7 +410,10 @@ const SUPPRESSED_AGENT_STEPS = new Set([
  * Buffers jury/cards/citations/exclusions and synthesizes
  * `consensus_resolved` and `recommendations_ready` events at the right moments.
  */
-export async function* streamFromBackend(query: string): AsyncGenerator<StreamEvent> {
+export async function* streamFromBackend(
+  query: string,
+  signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
   const resp = await fetch(`${apiUrl}/query`, {
@@ -418,6 +421,7 @@ export async function* streamFromBackend(query: string): AsyncGenerator<StreamEv
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
     cache: "no-store",
+    signal,
   });
   if (!resp.ok || !resp.body) {
     throw new Error(`HTTP ${resp.status}`);
@@ -435,6 +439,10 @@ export async function* streamFromBackend(query: string): AsyncGenerator<StreamEv
   let buffer = "";
 
   while (true) {
+    if (signal?.aborted) {
+      reader.cancel().catch(() => {});
+      return;
+    }
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });

@@ -139,6 +139,85 @@ def facility_detail(facility_id: str):
     }
 
 
+# Capability id (frontend) → claim_type strings present in silver.facility_claims.
+# Empty list = capability has no jury data yet → endpoint falls back to overall trust.
+CAPABILITY_TO_CLAIM_TYPES: dict[str, list[str]] = {
+    "emergency": ["emergency_surgery", "general_surgery", "icu_24_7"],
+    "neonatal":  ["picu", "obstetrics"],
+    "dialysis":  [],
+    "oncology":  ["oncology_specialty"],
+    "cardiac":   [],
+    "trauma":    ["emergency_surgery", "general_surgery"],
+}
+
+
+@app.get("/districts/best")
+def districts_best(state: str, city: str, capability: str = "emergency", limit: int = 3):
+    """Top facilities in a (state, city), ranked by trust score.
+
+    Facilities with a supported claim matching the capability sort above
+    facilities without (so capability-relevant ones surface first), but the
+    endpoint still returns results when no claim data exists for the chosen
+    capability — it just degrades to pure trust ranking.
+    """
+    if capability not in CAPABILITY_TO_CLAIM_TYPES:
+        raise HTTPException(status_code=400, detail=f"unknown capability: {capability}")
+    n = max(1, min(int(limit), 25))
+    state_q = state.replace("'", "''")
+    city_q = city.replace("'", "''")
+    claim_types = CAPABILITY_TO_CLAIM_TYPES[capability]
+    if claim_types:
+        claim_filter = "(" + ", ".join(f"'{ct}'" for ct in claim_types) + ")"
+        cap_clause = f"MAX(CASE WHEN c.claim_type IN {claim_filter} THEN 1 ELSE 0 END)"
+    else:
+        cap_clause = "0"
+
+    rows = db_query(f"""
+        SELECT
+            p.facility_id AS id, p.name, p.state, p.city,
+            p.facility_type AS type,
+            p.latitude AS lat, p.longitude AS lon,
+            t.existence, t.coherence, t.recency, t.specificity,
+            (COALESCE(t.existence,0) + COALESCE(t.coherence,0)
+             + COALESCE(t.recency,0) + COALESCE(t.specificity,0)) AS trust_total,
+            {cap_clause} AS has_cap_claim
+        FROM sanjeevani.silver.facilities_parsed p
+        LEFT JOIN sanjeevani.gold.trust_scores t ON t.facility_id = p.facility_id
+        LEFT JOIN sanjeevani.silver.facility_claims c ON c.facility_id = p.facility_id
+        WHERE p.state = '{state_q}' AND p.city = '{city_q}'
+          AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+        GROUP BY p.facility_id, p.name, p.state, p.city, p.facility_type,
+                 p.latitude, p.longitude,
+                 t.existence, t.coherence, t.recency, t.specificity
+        ORDER BY has_cap_claim DESC, trust_total DESC
+        LIMIT {n}
+    """)
+
+    facilities = []
+    for r in rows:
+        trust = None
+        if r.get("existence") is not None:
+            trust = {
+                "existence": float(r["existence"]),
+                "coherence": float(r["coherence"]),
+                "recency": float(r["recency"]),
+                "specificity": float(r["specificity"]),
+            }
+        facilities.append({
+            "id": r["id"], "name": r["name"],
+            "state": r.get("state"), "city": r.get("city"),
+            "type": r.get("type"),
+            "lat": float(r["lat"]) if r.get("lat") is not None else None,
+            "lon": float(r["lon"]) if r.get("lon") is not None else None,
+            "trust_badge": trust,
+            "matches_capability": bool(r.get("has_cap_claim")),
+        })
+    return {
+        "state": state, "city": city, "capability": capability,
+        "facilities": facilities,
+    }
+
+
 @app.get("/crisis-map")
 def crisis_map(capability: str, state: str | None = None):
     where_clauses = [f"s.capability = '{capability.replace(chr(39), chr(39)+chr(39))}'"]

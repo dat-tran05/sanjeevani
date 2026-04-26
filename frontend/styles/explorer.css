@@ -44,7 +44,7 @@
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 16px 20px 16px 52px;
+  padding: 16px 20px;
   font-size: 16px;
   font-family: var(--sans);
   line-height: 1.5;
@@ -61,15 +61,6 @@
 .query-input:focus { border-color: var(--green); }
 
 .query-wrap { position: relative; }
-.query-wrap .icn {
-  position: absolute;
-  left: 20px;
-  top: 20px;
-  width: 18px;
-  height: 18px;
-  color: var(--fg-3);
-  pointer-events: none;
-}
 
 .query-suggest {
   display: flex;

@@ -36,8 +36,10 @@ interface FacilityDetailResponse {
 const cache = new Map<string, RecommendedFacility>();
 const inflight = new Map<string, Promise<RecommendedFacility | null>>();
 
+// Backend stores trust dimensions as 0–1 floats (databricks 09_trust_scores.py);
+// the UI badge uses a 0–3 ordinal — scale at the API boundary.
 function clampDim(n: number): 0 | 1 | 2 | 3 {
-  return Math.round(Math.max(0, Math.min(3, n))) as 0 | 1 | 2 | 3;
+  return Math.round(Math.max(0, Math.min(3, n * 3))) as 0 | 1 | 2 | 3;
 }
 
 function buildTrust(

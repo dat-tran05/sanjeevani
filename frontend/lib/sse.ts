@@ -128,7 +128,10 @@ export function parseSSEFrame(frame: string): StreamEvent | null {
  * into the discriminated union the components consume (consensus_resolved,
  * recommendations_ready, …).
  */
-export async function* streamQuery(query: string): AsyncGenerator<StreamEvent> {
+export async function* streamQuery(
+  query: string,
+  signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
   const { streamFromBackend } = await import("@/lib/sse-adapter");
-  yield* streamFromBackend(query);
+  yield* streamFromBackend(query, signal);
 }

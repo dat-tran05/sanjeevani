@@ -1,15 +1,61 @@
 "use client";
 
 import Link from "next/link";
-import type { CapabilityId, DistrictPoint } from "@/lib/types";
+import { useEffect, useState } from "react";
+import type { CapabilityId, DistrictPoint, FacilityTrust } from "@/lib/types";
 import { CAPABILITIES } from "@/lib/demo/capability-bias";
-import { FACILITIES } from "@/lib/demo/facilities";
 import { TrustBadge } from "@/components/trust/TrustBadge";
 import { useDrawer } from "@/lib/hooks/use-drawer";
 
 interface DistrictDrillDownProps {
   district: DistrictPoint;
   capability: CapabilityId;
+}
+
+interface BestFacility {
+  id: string;
+  name: string;
+  type: string;
+  lat: number | null;
+  lon: number | null;
+  trust_badge: {
+    existence: number;
+    coherence: number;
+    recency: number;
+    specificity: number;
+  } | null;
+  matches_capability: boolean;
+}
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+function distanceKm(
+  lat1: number, lng1: number, lat2: number, lng2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Backend stores trust dimensions as 0–1 floats; UI badge uses 0–3 ordinal.
+function clampDim(n: number | null | undefined): 0 | 1 | 2 | 3 {
+  if (n == null) return 0;
+  return Math.round(Math.max(0, Math.min(3, n * 3))) as 0 | 1 | 2 | 3;
+}
+
+function trustFromBadge(b: BestFacility["trust_badge"]): FacilityTrust {
+  if (!b) return { existence: 0, coherence: 0, recency: 0, specificity: 0, score: 0 };
+  const e = clampDim(b.existence);
+  const c = clampDim(b.coherence);
+  const r = clampDim(b.recency);
+  const s = clampDim(b.specificity);
+  return { existence: e, coherence: c, recency: r, specificity: s, score: (e + c + r + s) / 12 };
 }
 
 export function DistrictDrillDown({
@@ -19,8 +65,34 @@ export function DistrictDrillDown({
   const { openDrawer } = useDrawer();
   const capLabel =
     CAPABILITIES.find((c) => c.id === capability)?.label ?? "";
-  const fac1 = FACILITIES["F-MZN-0214"];
-  const fac2 = FACILITIES["F-DBH-0109"];
+
+  const [best, setBest] = useState<BestFacility[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const url =
+      `${API_URL}/districts/best` +
+      `?state=${encodeURIComponent(district.state)}` +
+      `&city=${encodeURIComponent(district.name)}` +
+      `&capability=${capability}` +
+      `&limit=3`;
+    fetch(url, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { facilities: [] }))
+      .then((data: { facilities?: BestFacility[] }) => {
+        if (!cancelled) setBest(data.facilities ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setBest([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [district.state, district.name, capability]);
 
   const gapWord =
     district.gap > 0.7
@@ -32,13 +104,9 @@ export function DistrictDrillDown({
           : "well-served";
 
   const commentary =
-    district.id === "MZN"
-      ? "Muzaffarpur shows the pattern: many listed facilities, few verifiable for emergency surgery. Trust scores cluster low on Specificity — descriptions are short and rarely cite procedure detail."
-      : district.id === "BGS"
-        ? "Begusarai is among the most under-verified districts in eastern Bihar. Of 24 listed facilities, only 1 carries a supported emergency-surgery verdict from all three judges."
-        : district.gap > 0.7
-          ? `${district.name} sits in the top decile of capability gap. Most listed facilities lack equipment or procedure citations specific enough to verify ${capLabel.toLowerCase()}.`
-          : `${district.name} carries reasonable verification density for ${capLabel.toLowerCase()}. Specificity is the limiting trust dimension.`;
+    district.gap > 0.7
+      ? `${district.name} sits in the top decile of capability gap. Most listed facilities lack equipment or procedure citations specific enough to verify ${capLabel.toLowerCase()}.`
+      : `${district.name} carries reasonable verification density for ${capLabel.toLowerCase()}. Specificity is the limiting trust dimension.`;
 
   return (
     <div className="drilldown">
@@ -108,50 +176,48 @@ export function DistrictDrillDown({
         <div className="dd-section-h">
           Best-trust facilities for {capLabel.toLowerCase()}
         </div>
-        <div
-          className="dd-fac"
-          onClick={() => openDrawer("F-MZN-0214")}
-          style={{ cursor: "pointer" }}
-        >
-          <TrustBadge trust={fac1.trust} size="md" />
-          <span className="name">{fac1.name}</span>
-          <span className="km">{fac1.distance_km.toFixed(1)}km</span>
-        </div>
-        <div
-          className="dd-fac"
-          onClick={() => openDrawer("F-DBH-0109")}
-          style={{ cursor: "pointer" }}
-        >
-          <TrustBadge trust={fac2.trust} size="md" />
-          <span className="name">{fac2.name}</span>
-          <span className="km">{fac2.distance_km.toFixed(1)}km</span>
-        </div>
-        <div className="dd-fac">
-          <TrustBadge
-            trust={{
-              existence: 2,
-              coherence: 2,
-              recency: 1,
-              specificity: 1,
-              score: 0.52,
-            }}
-            size="md"
-          />
-          <span className="name">Sitamarhi Government Hospital</span>
-          <span className="km">71.2km</span>
-        </div>
+        {loading && (
+          <div className="dd-empty">Loading top facilities…</div>
+        )}
+        {!loading && best.length === 0 && (
+          <div className="dd-empty">
+            No facilities listed in {district.name} for {capLabel.toLowerCase()}.
+          </div>
+        )}
+        {!loading &&
+          best.map((f) => {
+            const km =
+              f.lat != null && f.lon != null
+                ? distanceKm(district.lat, district.lng, f.lat, f.lon)
+                : null;
+            return (
+              <div
+                key={f.id}
+                className="dd-fac"
+                onClick={() => openDrawer(f.id)}
+                style={{ cursor: "pointer" }}
+              >
+                <TrustBadge trust={trustFromBadge(f.trust_badge)} size="md" />
+                <span className="name">
+                  {f.name}
+                  {f.matches_capability && (
+                    <span className="dd-fac-tag" title="Has supported jury verdict for this capability">
+                      ✓
+                    </span>
+                  )}
+                </span>
+                <span className="km">
+                  {km != null ? `${km.toFixed(1)}km` : "—"}
+                </span>
+              </div>
+            );
+          })}
 
         <div className="dd-section-h">Adjacent districts</div>
         <div
           style={{ fontSize: 13, color: "var(--fg-3)", lineHeight: 1.6 }}
         >
-          {district.id === "MZN" &&
-            "Vaishali (gap 0.74) · Darbhanga (0.71) · Sitamarhi (0.79) — all within 80km."}
-          {district.id === "BGS" &&
-            "Begusarai sits between Patna's well-served corridor and Bihar's eastern desert."}
-          {district.id !== "MZN" &&
-            district.id !== "BGS" &&
-            "Bordering districts share the same trust profile — gap is regional, not local."}
+          Bordering districts share the same trust profile — gap is regional, not local.
         </div>
 
         <Link

@@ -458,6 +458,19 @@
   color: var(--fg-3);
   font-variant-numeric: tabular-nums;
 }
+.dd-fac-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10.5px;
+  color: #34c58a;
+  font-weight: 700;
+}
+.dd-empty {
+  padding: 14px 0;
+  font-size: 13px;
+  color: var(--fg-3);
+  font-style: italic;
+}
 
 .dd-commentary {
   margin-top: 20px;

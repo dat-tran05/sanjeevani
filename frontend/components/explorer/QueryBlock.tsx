@@ -54,10 +54,6 @@ export function QueryBlock({
         </span>
       </div>
       <div className="query-wrap">
-        <svg className="icn" viewBox="0 0 18 18" fill="none">
-          <circle cx="8" cy="8" r="5" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M12 12l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
         <textarea
           ref={textareaRef}
           className="query-input"

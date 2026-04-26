@@ -58,14 +58,25 @@ export function useEventStream(opts: UseEventStreamOptions = {}): UseEventStream
   const [events, setEvents] = useState<TaggedEvent[]>([]);
   const [running, setRunning] = useState(false);
   const seenTypes = useRef<Set<StreamEventType>>(new Set());
+  // Cancels the in-flight stream when `run` is invoked again. React 19
+  // StrictMode in dev fires the parent useEffect twice on mount, which would
+  // otherwise open two backend pipelines concurrently and interleave both
+  // sets of events into the trace (PLANNER × 2, sql_prefilter × 2, etc.).
+  const abortRef = useRef<AbortController | null>(null);
 
   const run = useCallback(
     async (query: string) => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const { signal } = controller;
+
       setRunning(true);
       setEvents([]);
       seenTypes.current = new Set();
 
       const append = (ev: StreamEvent, source: "live" | "demo") => {
+        if (signal.aborted) return;
         seenTypes.current.add(ev.type);
         setEvents((prev) => [...prev, { __source: source, ev }]);
       };
@@ -83,7 +94,9 @@ export function useEventStream(opts: UseEventStreamOptions = {}): UseEventStream
         playDemoFallback(false);
         // running stays true while timeouts fire; flip after the last one.
         const total = DEMO_TRACE[DEMO_TRACE.length - 1]?.delay_ms ?? 0;
-        window.setTimeout(() => setRunning(false), (total / speed) + 100);
+        window.setTimeout(() => {
+          if (!signal.aborted) setRunning(false);
+        }, (total / speed) + 100);
         return;
       }
 
@@ -95,19 +108,24 @@ export function useEventStream(opts: UseEventStreamOptions = {}): UseEventStream
         // is a no-op — long-running streams (e.g. 110s pipeline) shouldn't
         // get demo events spliced in mid-flight.
         fallbackTimer = setTimeout(() => {
+          if (signal.aborted) return;
           if (seenTypes.current.size === 0) {
             playDemoFallback(true);
           }
         }, fallbackTimeoutMs);
-        for await (const ev of streamQuery(query)) {
+        for await (const ev of streamQuery(query, signal)) {
+          if (signal.aborted) break;
           append(ev, "live");
         }
         if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (signal.aborted) return;
         // Live stream ended — synthesize any required types still missing.
         const missing = FALLBACK_REQUIRED_TYPES.filter((t) => !seenTypes.current.has(t));
         if (missing.length > 0) playDemoFallback(true);
       } catch (e) {
         if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (signal.aborted) return;
+        if (e instanceof Error && e.name === "AbortError") return;
         append(
           {
             type: "error",
@@ -117,7 +135,7 @@ export function useEventStream(opts: UseEventStreamOptions = {}): UseEventStream
         );
         playDemoFallback(true);
       } finally {
-        setRunning(false);
+        if (!signal.aborted) setRunning(false);
       }
     },
     [fallbackTimeoutMs, forceDemo, speed]
