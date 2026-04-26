@@ -7,9 +7,20 @@ _client: AnthropicBedrock | None = None
 
 
 def get_client() -> AnthropicBedrock:
-    """Singleton AnthropicBedrock client."""
+    """Singleton AnthropicBedrock client.
+
+    If AWS_BEARER_TOKEN_BEDROCK is set, force bearer-token auth by clearing
+    legacy AWS credentials from the boto3 chain AND pointing the shared
+    credentials/config files at /dev/null. Otherwise stale ~/.aws/credentials
+    files take precedence and produce expired-token 403 errors.
+    """
     global _client
     if _client is None:
+        if os.environ.get("AWS_BEARER_TOKEN_BEDROCK"):
+            for legacy in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "AWS_PROFILE"):
+                os.environ.pop(legacy, None)
+            os.environ["AWS_SHARED_CREDENTIALS_FILE"] = "/dev/null"
+            os.environ["AWS_CONFIG_FILE"] = "/dev/null"
         _client = AnthropicBedrock(aws_region=os.environ.get("AWS_REGION", "us-east-1"))
     return _client
 
@@ -19,7 +30,8 @@ def get_sonnet_model_id() -> str:
 
 
 def get_haiku_model_id() -> str:
-    return os.environ.get("BEDROCK_MODEL_ID_HAIKU", "us.anthropic.claude-haiku-4-5")
+    # Bedrock requires the dated, versioned model ID (not the bare slug).
+    return os.environ.get("BEDROCK_MODEL_ID_HAIKU", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 
 
 def stream_with_thinking(
