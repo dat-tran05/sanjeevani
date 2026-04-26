@@ -35,7 +35,13 @@ export function SplashVisual() {
         viewBox="0 0 1000 800"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
+        role="img"
+        aria-labelledby="splash-india-title"
       >
+        <title id="splash-india-title">
+          Stylized map of India with 240 facility pins lighting up across all states and Union
+          Territories, plus a pulsing target over Bihar marking the demo query location.
+        </title>
         <defs>
           <linearGradient id="india-fill" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="rgba(43,182,115,0.06)" />
