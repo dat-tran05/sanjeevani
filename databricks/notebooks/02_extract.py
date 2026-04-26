@@ -15,8 +15,16 @@
 
 CATALOG = "sanjeevani"
 LLAMA_ENDPOINT = "databricks-meta-llama-3-3-70b-instruct"
-SUBSET_FILTER = "state = 'Bihar'"
-SUBSET_LIMIT = 100
+
+# Phase B2 subset: hero-query keyword prefilter (~150 facilities)
+SUBSET_FILTER = """(
+    (state='Bihar' AND description RLIKE '(?i)(surgery|emergency|operation|theatre|operating)')
+    OR (state='Maharashtra' AND city IN ('Mumbai','Thane','Navi Mumbai','New Mumbai')
+        AND (description RLIKE '(?i)(oncolog|cancer|radiation|chemo)' OR
+             array_contains(specialties, 'oncology')))
+    OR (state='Tamil Nadu' AND description RLIKE '(?i)(pediatric|paediatric|PICU|NICU|intensive care|child)')
+)"""
+SUBSET_LIMIT = 200
 
 # COMMAND ----------
 
@@ -38,6 +46,19 @@ spark.sql(f"""
         urgent_care_signals ARRAY<STRING>,
         extracted_at TIMESTAMP,
         extractor_model STRING
+    ) USING DELTA
+""")
+
+spark.sql(f"""
+    CREATE TABLE IF NOT EXISTS {CATALOG}.silver.facility_claims (
+        claim_id STRING,
+        facility_id STRING,
+        claim_type STRING,
+        claim_text STRING,
+        source_column STRING,
+        char_start INT,
+        char_end INT,
+        created_at TIMESTAMP
     ) USING DELTA
 """)
 
@@ -113,6 +134,80 @@ CAPABILITY_NOTES: {capability}
 
 Return ONLY the JSON object, no commentary."""
 
+import re
+import hashlib
+from datetime import datetime, timezone
+
+# Map claim_type slots to short prefixes for stable claim_ids
+CLAIM_TYPE_PREFIX = {
+    "emergency_surgery": "es",
+    "oncology_specialty": "os",
+    "picu": "pi",
+    "icu_24_7": "ic",
+    "obstetrics": "ob",
+    "general_surgery": "gs",
+    "specialty_claim": "sp",
+    "equipment_claim": "eq",
+}
+
+
+def derive_claims(facility_id: str, extracted: ExtractedCapabilities,
+                  description: str | None) -> list[dict]:
+    """Generate one row per surfaced capability with stable claim_id and offsets."""
+    rows = []
+    desc = description or ""
+    seen_types = set()
+
+    def add(claim_type: str, claim_text: str, search_terms: list[str]):
+        if claim_type in seen_types:
+            return
+        seen_types.add(claim_type)
+        prefix = CLAIM_TYPE_PREFIX.get(claim_type, "ot")
+        # facility_id is a long sha; take last 8 hex chars for compactness
+        short_id = facility_id[-8:].upper()
+        claim_id = f"cap_{prefix}_F-{short_id}"
+        # Locate first occurrence of any search term in description (case-insensitive)
+        char_start, char_end = -1, -1
+        for term in search_terms:
+            m = re.search(re.escape(term), desc, re.IGNORECASE)
+            if m:
+                char_start, char_end = m.start(), m.end()
+                break
+        rows.append({
+            "claim_id": claim_id,
+            "facility_id": facility_id,
+            "claim_type": claim_type,
+            "claim_text": claim_text,
+            "source_column": "description",
+            "char_start": char_start,
+            "char_end": char_end,
+            "created_at": datetime.now(timezone.utc),
+        })
+
+    if extracted.surgery_capable:
+        if extracted.emergency_24_7:
+            add("emergency_surgery", "Operates 24/7 emergency surgery",
+                ["emergency", "24-hour", "24 hour", "24/7", "around the clock"])
+        else:
+            add("general_surgery", "Performs general surgery",
+                ["surgery", "operation", "operating", "theatre"])
+    if extracted.emergency_24_7 and not extracted.surgery_capable:
+        add("icu_24_7", "Operates 24/7 emergency / intensive care",
+            ["emergency", "24-hour", "24 hour", "24/7", "ICU", "intensive"])
+    # Specialty claims from explicit_capabilities array
+    for cap in extracted.explicit_capabilities[:3]:
+        cap_lower = cap.lower()
+        if any(k in cap_lower for k in ["oncolog", "cancer", "radiation", "chemo"]):
+            add("oncology_specialty", f"Listed oncology capability: {cap}",
+                ["oncolog", "cancer", "radiation", "chemo"])
+        elif any(k in cap_lower for k in ["pediatric", "paediatric", "picu", "child", "neonatal"]):
+            add("picu", f"Listed pediatric/PICU capability: {cap}",
+                ["pediatric", "paediatric", "PICU", "NICU", "child"])
+        elif any(k in cap_lower for k in ["obstetric", "maternity", "delivery"]):
+            add("obstetrics", f"Listed obstetrics capability: {cap}",
+                ["obstetric", "maternity", "delivery"])
+    return rows
+
 # COMMAND ----------
 
 # MAGIC %md ## Step 3: Run extraction with retries
@@ -164,6 +259,7 @@ def extract_one(row) -> ExtractedCapabilities:
 
 
 extracted_records = []
+claims_records = []
 failures = []
 for i, row in enumerate(todo):
     try:
@@ -174,13 +270,15 @@ for i, row in enumerate(todo):
             "extracted_at": datetime.now(timezone.utc),
             "extractor_model": "llama-3-3-70b",
         })
+        for c in derive_claims(row.facility_id, result, row.description):
+            claims_records.append(c)
         if (i + 1) % 10 == 0:
-            print(f"  {i+1}/{len(todo)} done")
+            print(f"  {i+1}/{len(todo)} done ({len(claims_records)} claims so far)")
     except Exception as e:
         print(f"  FAIL {row.facility_id}: {type(e).__name__}: {e}")
         failures.append((row.facility_id, str(e)))
 
-print(f"\nExtracted: {len(extracted_records)}, Failed: {len(failures)}")
+print(f"\nExtracted: {len(extracted_records)}, Claims: {len(claims_records)}, Failed: {len(failures)}")
 
 # COMMAND ----------
 
@@ -202,14 +300,33 @@ if extracted_records:
 
     print(f"MERGE complete. Total in table: {spark.table(f'{CATALOG}.silver.facilities_extracted').count()}")
 
+if claims_records:
+    claims_df = spark.createDataFrame(claims_records)
+    claims_df.createOrReplaceTempView("new_claims")
+
+    spark.sql(f"""
+        MERGE INTO {CATALOG}.silver.facility_claims AS target
+        USING new_claims AS source
+        ON target.claim_id = source.claim_id
+        WHEN MATCHED THEN UPDATE SET *
+        WHEN NOT MATCHED THEN INSERT *
+    """)
+
+    print(f"Claims MERGE complete. Total in table: {spark.table(f'{CATALOG}.silver.facility_claims').count()}")
+
 # COMMAND ----------
 
-# Sanity check: pick one Bihar row
+# Sanity check
 display(spark.sql(f"""
     SELECT p.name, p.state, p.city, e.surgery_capable, e.emergency_24_7,
            e.explicit_capabilities, e.staff_mentioned
     FROM {CATALOG}.silver.facilities_extracted e
     JOIN {CATALOG}.silver.facilities_parsed p USING (facility_id)
-    WHERE p.state = 'Bihar'
-    LIMIT 5
+    LIMIT 10
+"""))
+
+display(spark.sql(f"""
+    SELECT claim_id, facility_id, claim_type, claim_text, char_start, char_end
+    FROM {CATALOG}.silver.facility_claims
+    LIMIT 10
 """))
