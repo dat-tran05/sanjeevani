@@ -1,4 +1,5 @@
 """LangGraph wiring — intent → retriever → answer (streaming via callback)."""
+import time
 from collections.abc import Iterator
 
 from langgraph.graph import StateGraph, START, END
@@ -25,25 +26,72 @@ def build_graph():
 def run_query_stream(query_text: str) -> Iterator[StreamEvent]:
     """Top-level: runs the graph, streams events, finishes with answer streaming."""
     try:
-        yield agent_step_start("intent", "extracting query attributes")
+        # intent
+        t0 = time.perf_counter()
+        yield agent_step_start("intent", "intent", "Intent extraction · Llama 3.3")
         graph = build_graph()
         result = graph.invoke({"query": query_text})
         intent = result["intent"]
-        yield agent_step_end("intent", f"state={intent.state} setting={intent.setting} capability={intent.capability}")
+        intent_detail = (
+            f'{{"state":"{intent.state}",'
+            f'"setting":"{intent.setting}",'
+            f'"capability":"{intent.capability}"}}'
+        )
+        yield agent_step_end(
+            "intent",
+            "intent",
+            summary=f"state={intent.state} setting={intent.setting} capability={intent.capability}",
+            detail=intent_detail,
+            duration_ms=(time.perf_counter() - t0) * 1000,
+        )
 
-        yield agent_step_start("retriever", "querying facilities")
-        yield tool_call("databricks_sql", {"state": intent.state}, output_summary=f"{len(result.get('candidates', []))} candidates")
-        yield agent_step_end("retriever", f"{len(result.get('candidates', []))} candidates ranked")
+        # retriever
+        t1 = time.perf_counter()
+        yield agent_step_start("retriever", "retriever", "Hybrid retrieval · Databricks SQL + GTE")
+        n_candidates = len(result.get("candidates", []))
+        retriever_detail = (
+            "SELECT * FROM silver.facilities_extracted\n"
+            f" WHERE state='{intent.state}'\n"
+            "   AND facility_type IN ('hospital','clinic')\n"
+            f"→ {n_candidates} candidates"
+        )
+        yield tool_call(
+            "databricks_sql",
+            input={"state": intent.state},
+            output_summary=f"{n_candidates} candidates",
+            duration_ms=(time.perf_counter() - t1) * 1000,
+        )
+        yield agent_step_end(
+            "retriever",
+            "retriever",
+            summary=f"{n_candidates} candidates ranked",
+            detail=retriever_detail,
+            duration_ms=(time.perf_counter() - t1) * 1000,
+        )
 
-        yield agent_step_start("answer", "synthesizing answer with Sonnet 4.6")
+        # answer
+        t2 = time.perf_counter()
+        yield agent_step_start("answer", "answer", "Synthesis · Sonnet 4.6")
         for chunk in answer_node_streaming(result):
             yield text(chunk)
-        yield agent_step_end("answer")
+        yield agent_step_end(
+            "answer",
+            "answer",
+            detail=f"Synthesized response from top {min(n_candidates, 3)} candidates with citations.",
+            duration_ms=(time.perf_counter() - t2) * 1000,
+        )
 
-        # Emit citations for top 3 candidates
-        for f in result.get("candidates", [])[:3]:
+        # Emit citations for top 3 candidates with stable ids c1, c2, c3
+        for i, f in enumerate(result.get("candidates", [])[:3], start=1):
             if f.description:
                 excerpt = f.description[:200]
-                yield citation(f.facility_id, "description", 0, len(excerpt), excerpt)
+                yield citation(
+                    f"c{i}",
+                    f.facility_id,
+                    "description",
+                    0,
+                    len(excerpt),
+                    excerpt,
+                )
     except Exception as e:
         yield error(f"{type(e).__name__}: {e}")

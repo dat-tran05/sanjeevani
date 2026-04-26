@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { streamQuery, type StreamEvent, type StreamEventType } from "@/lib/sse";
 import { DEMO_TRACE } from "@/lib/demo/trace";
 
@@ -16,9 +16,9 @@ export interface TaggedEvent {
 
 export interface UseEventStreamOptions {
   /**
-   * If the live stream finishes (or 8s elapse) without any of the four
-   * fallback-required events, demo-trace events for the missing types are
-   * appended. Override the elapsed time here.
+   * If the live stream finishes (or `fallbackTimeoutMs` elapse) without any
+   * of the four fallback-required events, demo-trace events for the missing
+   * types are appended.
    */
   fallbackTimeoutMs?: number;
   /** When true (e.g. ?demo=1 query param), skip live fetch entirely. */
@@ -51,28 +51,52 @@ const FALLBACK_REQUIRED_TYPES: ReadonlyArray<StreamEventType> = [
  *
  * In `forceDemo` mode (?demo=1) skips the live fetch entirely and replays
  * DEMO_TRACE on its native timeline scaled by `speed`.
+ *
+ * Race-safe: each `run()` increments a generation counter; appends from
+ * a previous run (timer callbacks, in-flight fetch reads) are dropped when
+ * their generation no longer matches the active one. Strict-Mode double-mount
+ * and rapid `run()` calls cannot interleave events anymore.
  */
 export function useEventStream(opts: UseEventStreamOptions = {}): UseEventStreamReturn {
   const { fallbackTimeoutMs = 8000, forceDemo = false, speed = 1 } = opts;
   const [events, setEvents] = useState<TaggedEvent[]>([]);
   const [running, setRunning] = useState(false);
-  const seenTypes = useRef<Set<StreamEventType>>(new Set());
+  const genRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
+  const seenTypesRef = useRef<Set<StreamEventType>>(new Set());
+
+  // Cleanup on unmount: abort in-flight stream so the catch path doesn't
+  // append stale events to a torn-down React tree.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      genRef.current += 1;
+    };
+  }, []);
 
   const run = useCallback(
     async (query: string) => {
-      setRunning(true);
+      // Bump generation; abort any prior fetch.
+      genRef.current += 1;
+      const myGen = genRef.current;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      seenTypesRef.current = new Set();
       setEvents([]);
-      seenTypes.current = new Set();
+      setRunning(true);
 
       const append = (ev: StreamEvent, source: "live" | "demo") => {
-        seenTypes.current.add(ev.type);
+        if (genRef.current !== myGen) return; // stale
+        seenTypesRef.current.add(ev.type);
         setEvents((prev) => [...prev, { __source: source, ev }]);
       };
 
       const playDemoFallback = (skipSeen: boolean) => {
         const baseT = performance.now();
         for (const { ev, delay_ms } of DEMO_TRACE) {
-          if (skipSeen && seenTypes.current.has(ev.type)) continue;
+          if (skipSeen && seenTypesRef.current.has(ev.type)) continue;
           const remaining = delay_ms / speed - (performance.now() - baseT);
           window.setTimeout(() => append(ev, "demo"), Math.max(0, remaining));
         }
@@ -80,38 +104,49 @@ export function useEventStream(opts: UseEventStreamOptions = {}): UseEventStream
 
       if (forceDemo) {
         playDemoFallback(false);
-        // running stays true while timeouts fire; flip after the last one.
         const total = DEMO_TRACE[DEMO_TRACE.length - 1]?.delay_ms ?? 0;
-        window.setTimeout(() => setRunning(false), (total / speed) + 100);
+        window.setTimeout(() => {
+          if (genRef.current === myGen) setRunning(false);
+        }, total / speed + 100);
         return;
       }
 
       let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
       try {
-        fallbackTimer = setTimeout(() => playDemoFallback(true), fallbackTimeoutMs);
-        for await (const ev of streamQuery(query)) {
+        fallbackTimer = setTimeout(() => {
+          if (genRef.current === myGen) playDemoFallback(true);
+        }, fallbackTimeoutMs);
+
+        for await (const ev of streamQuery(query, controller.signal)) {
+          if (genRef.current !== myGen) break; // stale, abort consumption
           append(ev, "live");
         }
+
         if (fallbackTimer) clearTimeout(fallbackTimer);
-        // Live stream ended — synthesize any required types still missing.
-        const missing = FALLBACK_REQUIRED_TYPES.filter((t) => !seenTypes.current.has(t));
+        if (genRef.current !== myGen) return;
+
+        const missing = FALLBACK_REQUIRED_TYPES.filter(
+          (t) => !seenTypesRef.current.has(t),
+        );
         if (missing.length > 0) playDemoFallback(true);
       } catch (e) {
         if (fallbackTimer) clearTimeout(fallbackTimer);
+        if (genRef.current !== myGen) return; // ignore aborted-by-newer-run
+        if (e instanceof DOMException && e.name === "AbortError") return;
         append(
           {
             type: "error",
             data: { message: e instanceof Error ? e.message : "stream failed" },
           },
-          "live"
+          "live",
         );
         playDemoFallback(true);
       } finally {
-        setRunning(false);
+        if (genRef.current === myGen) setRunning(false);
       }
     },
-    [fallbackTimeoutMs, forceDemo, speed]
+    [fallbackTimeoutMs, forceDemo, speed],
   );
 
   return { events, running, run };

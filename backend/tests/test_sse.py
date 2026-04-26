@@ -21,9 +21,11 @@ def test_thinking_helper():
 
 
 def test_agent_step_helper():
-    ev = agent_step_start("retriever", "looking up Bihar candidates")
+    ev = agent_step_start("retriever", "retriever", "Hybrid retrieval · Databricks SQL + GTE")
     assert ev.type == EventType.AGENT_STEP_START
+    assert ev.data["step_id"] == "retriever"
     assert ev.data["name"] == "retriever"
+    assert ev.data["label"] == "Hybrid retrieval · Databricks SQL + GTE"
 
 
 def test_text_helper():
@@ -33,8 +35,9 @@ def test_text_helper():
 
 
 def test_citation_helper():
-    ev = citation("fac-123", "description", 12, 50, "performs surgery 24/7")
+    ev = citation("c1", "fac-123", "description", 12, 50, "performs surgery 24/7")
     assert ev.type == EventType.CITATION
+    assert ev.data["citation_id"] == "c1"
     assert ev.data["facility_id"] == "fac-123"
     assert ev.data["char_start"] == 12
     assert ev.data["char_end"] == 50

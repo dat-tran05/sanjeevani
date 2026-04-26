@@ -22,6 +22,10 @@ export type StreamEvent =
         step_id: string;
         name: string;
         summary?: string;
+        /** Mono-text body shown under the step label — typically a SQL
+         *  snippet, a numeric breakdown, or whatever rich detail the node
+         *  produced. Free-form, multi-line allowed. */
+        detail?: string;
         duration_ms?: number;
       };
     }
@@ -124,13 +128,20 @@ export function parseSSEFrame(frame: string): StreamEvent | null {
 /**
  * POST a query to the backend and yield SSE events as they arrive.
  * The hook layer (`useEventStream`) merges live + baked demo data.
+ *
+ * Pass an AbortSignal to cancel the in-flight fetch (used to discard a
+ * superseded run when the user changes the active query).
  */
-export async function* streamQuery(query: string): AsyncGenerator<StreamEvent> {
+export async function* streamQuery(
+  query: string,
+  signal?: AbortSignal,
+): AsyncGenerator<StreamEvent> {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   const resp = await fetch(`${apiUrl}/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
+    signal,
   });
   if (!resp.ok || !resp.body) {
     throw new Error(`HTTP ${resp.status}`);
@@ -139,16 +150,20 @@ export async function* streamQuery(query: string): AsyncGenerator<StreamEvent> {
   const decoder = new TextDecoder();
   let buffer = "";
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buffer.indexOf("\n\n")) !== -1) {
-      const frame = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      const ev = parseSSEFrame(frame);
-      if (ev) yield ev;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        const frame = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const ev = parseSSEFrame(frame);
+        if (ev) yield ev;
+      }
     }
+  } finally {
+    reader.cancel().catch(() => {});
   }
 }
