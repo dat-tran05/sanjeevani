@@ -154,6 +154,7 @@ planner (Sonnet ext-thinking)
 | Retrieval | `rank-bm25` (in-process) + NumPy cosine + RRF + LLM rerank | Bypasses Free Edition Mosaic VS limits; fully transparent funnel |
 | Storage | Delta Lake on Unity Catalog (bronze/silver/gold) | Standard Lakehouse pattern |
 | SQL | Databricks SQL Warehouse | Agent-callable analytics |
+| Text-to-SQL | Databricks **Genie** (registered as a callable agent tool, `DATABRICKS_GENIE_SPACE_ID`) | Lets the agent answer free-form analytical follow-ups ("how many Bihar facilities mention an anesthesiologist?") without hand-writing the SQL — banks the autonomous-data-task credit |
 | Tracing | MLflow 3 `mlflow.langchain.autolog()` | One-line setup; captures every node, tool, token |
 | Compute (offline) | Databricks Jobs / serverless notebooks | Native, scheduled runs |
 | Deployment | Local dev for app shell; Databricks for everything offline | Per Free-Edition constraints |
@@ -184,7 +185,7 @@ planner (Sonnet ext-thinking)
 | Weight | Criterion | What we deliver |
 |---|---|---|
 | **35%** | Discovery & Verification | Verifiable Consensus — three heterogeneous judges (Sonnet 4.6, Llama 3.3 70B, Qwen3-Next 80B) independently verdict each claim. Agreement rate is our confidence metric. Validator agent runs as an independent fresh-context second pass. |
-| **30%** | IDP Innovation | Full Databricks-native stack: Delta + Unity Catalog + Foundation Model API + Model Serving + MLflow 3 autolog + SQL Warehouse. Bronze / Silver / Gold ETL. Hybrid retrieval implemented in-process for full transparency. |
+| **30%** | IDP Innovation | Full Databricks-native stack: Delta + Unity Catalog + Foundation Model API + Model Serving (Llama 3.3 70B + Qwen3-Next 80B) + MLflow 3 autolog + SQL Warehouse + **Genie** registered as a callable agent tool for free-form text-to-SQL follow-ups. Bronze / Silver / Gold ETL. Hybrid retrieval implemented in-process for full transparency. |
 | **25%** | Social Impact & Utility | Concrete NGO planner workflow: ask → cited recommendation → "Why not these?" panel with rejection reasons → desert map → district drill-down. Auditable end-to-end. |
 | **10%** | UX & Transparency | Live agent trace stream + jury panel + extended-thinking blocks rendered as collapsible reasoning + sentence-level citation hover. Transparency is the UX. |
 
@@ -216,6 +217,30 @@ A medical desert isn't a place without hospitals — it's a place without *verif
 
 ---
 
+## Research & Inspiration
+
+Verifiable Consensus is an *application* of well-established LLM ensemble + self-verification literature, not a from-scratch invention. We picked techniques whose published evaluation results matched the failure modes we observed in the dataset (over-claims, sparse evidence, no ground truth) and combined them around a clear product story. The key sources we built on:
+
+- **Verga, P., Hofstätter, S., Althammer, S., Su, Y., Piktus, A., Arkhangorodsky, A., Xu, M., White, N., Lewis, P. (2024). "Replacing Judges with Juries: Evaluating LLM Generations with a Panel of Diverse Models." [arXiv:2404.18796](https://arxiv.org/abs/2404.18796)** — *foundational paper for our heterogeneous-jury design.* Verga et al. show that a Panel of LLM Evaluators (PoLL) drawn from different model families produces lower-bias evaluations than a single strong judge, even when the panel members are individually weaker. This is exactly why we run Sonnet 4.6, Llama 3.3 70B, and Qwen3-Next 80B as three independent judges — heterogeneity across vendors decorrelates errors.
+
+- **Wang, J., Wang, J., Athiwaratkun, B., Zhang, C., Zou, J. (2024). "Mixture-of-Agents Enhances Large Language Model Capabilities." [arXiv:2406.04692](https://arxiv.org/abs/2406.04692)** *(Together AI)* — *direct architectural template for our online MoA pipeline.* Wang et al. demonstrate that having multiple proposer LLMs generate independent answers and then having an aggregator LLM synthesize them outperforms any single proposer, including GPT-4o. Our `moa_propose` (Sonnet ‖ Llama parallel) → `aggregator` (Sonnet with extended thinking) is a direct instantiation of this pattern.
+
+- **Du, Y., Li, S., Torralba, A., Tenenbaum, J. B., Mordatch, I. (2023). "Improving Factuality and Reasoning in Language Models through Multiagent Debate." [arXiv:2305.14325](https://arxiv.org/abs/2305.14325)** — *inspiration for the tiebreaker pattern.* Du et al. show that when multiple agents disagree, having them critique each other's reasoning before a final adjudicator yields measurable factuality gains. Our tiebreaker invokes Sonnet 4.6 with extended thinking on jury-split claims, surfacing the disagreement reasoning back through the trace UI rather than hiding it.
+
+- **Zheng, L., Chiang, W.-L., Sheng, Y., Zhuang, S., Wu, Z., Zhuang, Y., Lin, Z., Li, Z., Li, D., Xing, E. P., Zhang, H., Gonzalez, J. E., Stoica, I. (2023). "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena." [arXiv:2306.05685](https://arxiv.org/abs/2306.05685)** — *empirical justification for using LLMs as evaluators at all.* Zheng et al. quantify when LLM judges agree with human preference (~80% on hard tasks) and where they fail (verbosity bias, position bias). Their findings shaped our choice to use *agreement rate across heterogeneous judges* as the confidence signal rather than any single judge's reported confidence.
+
+- **Bai, Y. et al. (2022). "Constitutional AI: Harmlessness from AI Feedback." [arXiv:2212.08073](https://arxiv.org/abs/2212.08073)** *(Anthropic)* — *inspiration for the validator pass.* Constitutional AI's RLAIF pipeline introduced the pattern of running an independent reviewer step with a fresh context window over a different prompt to catch failures the original generator missed. Our `validator` node is a structural application of the same idea: fresh context, no prior messages, narrow remit (verify citation offsets resolve to real source text).
+
+- **Wang, X., Wei, J., Schuurmans, D., Le, Q., Chi, E., Narang, S., Chowdhery, A., Zhou, D. (2022). "Self-Consistency Improves Chain of Thought Reasoning in Language Models." [arXiv:2203.11171](https://arxiv.org/abs/2203.11171)** — *theoretical grounding for vote-aggregation.* Self-Consistency established that majority voting over multiple sampled reasoning paths beats any single path. Verifiable Consensus generalizes this from "same model, multiple samples" to "different models, single samples each" — the agreement pattern is the same.
+
+- **Cormack, G. V., Clarke, C. L. A., Buettcher, S. (2009). "Reciprocal Rank Fusion outperforms Condorcet and individual Rank Learning Methods." SIGIR 2009. [Paper PDF](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf)** — *the algorithm behind our hybrid retrieval merge.* RRF is the unsexy classic that quietly powers half the production retrieval systems shipped in the last decade. We use it (k=60) to fuse BM25 sparse and dense (gte-large-en cosine) ranking lists into the top-64 candidates that go into our LLM rerank step.
+
+- **Shinn, N., Cassano, F., Berman, E., Gopinath, A., Narasimhan, K., Yao, S. (2023). "Reflexion: Language Agents with Verbal Reinforcement Learning." [arXiv:2303.11366](https://arxiv.org/abs/2303.11366)** — *inspiration for self-correction loops.* Reflexion's pattern of having an agent reflect on its own output and revise informs our overall trust-loop philosophy: the validator and tiebreaker are both lightweight Reflexion-style passes specialized to specific failure modes (hallucinated citations, jury disagreement) rather than general-purpose self-critique.
+
+What we contributed on top of these foundations: (1) the *operationalization* — a 14-event SSE taxonomy that surfaces every juror, every disagreement, every tiebreak rationale, and every citation offset to the user, making the academic ensemble approach demo-able and auditable for a non-technical NGO planner; (2) the *heterogeneity discipline* — different vendors, different inference providers, no shared training data overlap, applied across both the offline jury and the online MoA proposers; and (3) the *graceful degradation contract* — when jury data is missing for an off-script query, cards still render with `meta: {jury: "not_pre_computed"}` rather than failing. The system is honest about what it knows and doesn't.
+
+---
+
 ## Additional Information (Optional)
 
 **Architecture decision record at:** [`docs/OVERVIEW.md`](./OVERVIEW.md) — full system overview, two-layer architecture diagrams, per-query flow, retrieval pipeline detail, trust scorer design, frontend chain-of-thought UX, tech-stack rationale, and open research questions.
@@ -241,7 +266,7 @@ A medical desert isn't a place without hospitals — it's a place without *verif
 ## Technologies / Tags
 
 **Primary stack:**
-`Databricks` `Unity Catalog` `Delta Lake` `Mosaic AI` `MLflow 3` `Foundation Model API` `Llama 3.3 70B` `Qwen3-Next 80B`
+`Databricks` `Unity Catalog` `Delta Lake` `Mosaic AI` `MLflow 3` `Foundation Model API` `Databricks Genie` `Databricks Model Serving` `Llama 3.3 70B` `Qwen3-Next 80B`
 `AWS Bedrock` `Claude Sonnet 4.6` `Claude Haiku 4.5`
 `Python` `FastAPI` `LangGraph` `Pydantic v2` `rank-bm25` `NumPy`
 `TypeScript` `Next.js 16` `React 19` `Tailwind` `shadcn/ui`
@@ -250,7 +275,9 @@ A medical desert isn't a place without hospitals — it's a place without *verif
 ## Additional Tags
 
 `agentic-AI` `multi-agent` `mixture-of-agents` `verifiable-consensus`
-`heterogeneous-jury` `RAG` `hybrid-retrieval` `BM25` `RRF` `extended-thinking`
+`heterogeneous-jury` `panel-of-LLM-evaluators` `LLM-as-a-judge`
+`RAG` `hybrid-retrieval` `BM25` `RRF` `extended-thinking`
 `trust-scoring` `medical-desert-mapping` `chain-of-thought-streaming`
 `citation-grounding` `MLflow-tracing` `self-correction` `validator-agent`
+`text-to-SQL` `Genie`
 `healthcare` `public-health` `India` `World-Bank` `equitable-access`
