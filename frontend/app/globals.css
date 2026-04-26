@@ -2,6 +2,15 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "../styles/tokens.css";
+@import "../styles/shell.css";
+@import "../styles/splash.css";
+@import "../styles/trust.css";
+@import "../styles/citation.css";
+@import "../styles/explorer.css";
+@import "../styles/trace.css";
+@import "../styles/atlas.css";
+@import "../styles/drawer.css";
+@import "../styles/about.css";
 
 @custom-variant dark (&:is(.dark *));
 

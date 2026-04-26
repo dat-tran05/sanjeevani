@@ -1,0 +1,77 @@
+/* Sanjeevani — citation (gold-glow pill + tooltip) */
+/* Citation pill */
+.citation-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--gold);
+  background: var(--gold-glow);
+  border: 1px solid rgba(212, 166, 97, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+  font-style: normal;
+  line-height: 1.4;
+  position: relative;
+  white-space: nowrap;
+}
+.citation-pill:hover, .citation-pill.active {
+  background: var(--gold);
+  color: #1A1409;
+  border-color: var(--gold);
+  transform: translateY(-1px);
+}
+.citation-pill .ico {
+  width: 9px; height: 9px;
+}
+
+/* Citation tooltip */
+.citation-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  width: 360px;
+  max-width: 90vw;
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow-2);
+  font-family: var(--sans);
+  font-style: normal;
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg-2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+  z-index: 50;
+  letter-spacing: 0;
+}
+.citation-pill:hover .citation-tooltip,
+.citation-pill.active .citation-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.citation-tooltip .src-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+  margin-bottom: 6px;
+}
+.citation-tooltip .src-text mark {
+  background: var(--gold-glow);
+  color: var(--gold);
+  padding: 0 2px;
+  border-radius: 2px;
+  font-weight: 500;
+}
