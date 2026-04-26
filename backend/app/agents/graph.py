@@ -1,49 +1,64 @@
-"""LangGraph wiring — intent → retriever → answer (streaming via callback)."""
-from collections.abc import Iterator
+"""LangGraph wiring + async-generator orchestrator.
 
-from langgraph.graph import StateGraph, START, END
+LangGraph holds the AgentState type for MLflow autolog; the actual run loop
+is the run_query_stream generator below, which dispatches each node and
+emits SSE events between them.
+"""
+from __future__ import annotations
+
+from collections.abc import Iterator
+import time
+import traceback
 
 from app.agents.state import AgentState
-from app.agents.intent import intent_node
-from app.agents.retriever import retriever_node
-from app.agents.answer import answer_node_streaming
-from app.streaming.sse import (
-    StreamEvent, agent_step_start, agent_step_end, tool_call, text, citation, error,
-)
+from app.agents.planner import planner_node_streaming
+from app.agents.intent import intent_node_streaming
+from app.agents.retrieval.sql_prefilter import sql_prefilter_node
+from app.agents.retrieval.hybrid import hybrid_retrieve_node
+from app.agents.retrieval.rerank import rerank_node
+from app.agents.moa import moa_propose_node
+from app.agents.aggregator import aggregator_node_streaming
+from app.agents.jury_lookup import jury_lookup_node
+from app.agents.tiebreaker import tiebreaker_node
+from app.agents.validator import validator_node
+from app.agents.emit import emit_node
+from app.streaming.sse import StreamEvent, error
 
 
-def build_graph():
-    graph = StateGraph(AgentState)
-    graph.add_node("intent", intent_node)
-    graph.add_node("retriever", retriever_node)
-    graph.add_edge(START, "intent")
-    graph.add_edge("intent", "retriever")
-    graph.add_edge("retriever", END)  # answer is streamed outside the graph
-    return graph.compile()
+def _drive(node_iter, state: AgentState) -> Iterator[StreamEvent]:
+    """Helper: run a generator that yields SSE events interspersed with ('done', patch)
+    sentinel tuples, applying the patches to the shared state and emitting the events."""
+    for item in node_iter:
+        if isinstance(item, tuple) and len(item) == 2 and item[0] == "done":
+            state.update(item[1])
+        else:
+            yield item
 
 
 def run_query_stream(query_text: str) -> Iterator[StreamEvent]:
-    """Top-level: runs the graph, streams events, finishes with answer streaming."""
+    state: AgentState = {"query": query_text}
+    started = time.perf_counter()
     try:
-        yield agent_step_start("intent", "extracting query attributes")
-        graph = build_graph()
-        result = graph.invoke({"query": query_text})
-        intent = result["intent"]
-        yield agent_step_end("intent", f"state={intent.state} setting={intent.setting} capability={intent.capability}")
+        yield from _drive(planner_node_streaming(query_text), state)
+        approach = state.get("planner").approach if state.get("planner") else ""
+        yield from _drive(intent_node_streaming(query_text, approach), state)
 
-        yield agent_step_start("retriever", "querying facilities")
-        yield tool_call("databricks_sql", {"state": intent.state}, output_summary=f"{len(result.get('candidates', []))} candidates")
-        yield agent_step_end("retriever", f"{len(result.get('candidates', []))} candidates ranked")
+        intent = state["intent"]
+        yield from _drive(sql_prefilter_node(intent), state)
+        yield from _drive(hybrid_retrieve_node(intent, state["candidate_ids"]), state)
+        yield from _drive(rerank_node(query_text, state["retrieved"]), state)
+        yield from _drive(moa_propose_node(intent, state["reranked"]), state)
+        yield from _drive(aggregator_node_streaming(intent, state["proposals"], state["reranked"]), state)
+        yield from _drive(jury_lookup_node(state["aggregated"]), state)
+        yield from _drive(tiebreaker_node(state.get("jury_results", [])), state)
+        yield from _drive(validator_node(state["aggregated"]), state)
 
-        yield agent_step_start("answer", "synthesizing answer with Sonnet 4.6")
-        for chunk in answer_node_streaming(result):
-            yield text(chunk)
-        yield agent_step_end("answer")
-
-        # Emit citations for top 3 candidates
-        for f in result.get("candidates", [])[:3]:
-            if f.description:
-                excerpt = f.description[:200]
-                yield citation(f.facility_id, "description", 0, len(excerpt), excerpt)
+        yield from emit_node(
+            aggregated=state["aggregated"],
+            jury_results=state.get("jury_results", []),
+            validator=state.get("validator"),
+            total_started_at=started,
+        )
     except Exception as e:
+        traceback.print_exc()
         yield error(f"{type(e).__name__}: {e}")
