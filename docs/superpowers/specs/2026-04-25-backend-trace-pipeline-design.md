@@ -47,8 +47,8 @@ These drive enrichment subset selection. Every other facility in the 10k dataset
 1. **"Find the nearest facility in rural Bihar that can perform an emergency appendectomy and typically leverages part-time doctors."**
    Muscle: rural sparsity + surgical capability + soft staffing constraint. Already covered by 100 Bihar rows.
 
-2. **"Which hospitals in Mumbai should I trust for radiation oncology? A lot of listings claim it, but I only want ones where the equipment and specialist roster actually back the claim up."**
-   Muscle: verification under inflated specialty claims. Triggers MoA disagreement and jury PARTIAL/UNSUPPORTED panels naturally.
+2. **"Which Bihar hospitals can I trust for round-the-clock ICU care? A lot of listings advertise 24/7 emergency or ICU service but I only want ones where the description actually backs it up."**
+   Muscle: verification under inflated capability claims. The dataset's icu_24_7 jury verdicts skew partial/unsupported, so this query reliably surfaces the trust system catching over-claims (jury PARTIAL/UNSUPPORTED panels + "Why not these?" exclusions). *Pivoted from the original Mumbai-radiation-oncology framing on 2026-04-26 — Mumbai jury coverage is structurally too thin (~3 juried claims) to support a satisfying answer; Bihar ICU coverage is an order of magnitude richer and tells the same story.*
 
 3. **"Where are the pediatric ICU deserts across Tamil Nadu? Show me districts where the nearest verified PICU is more than 100 km from a major population center."**
    Muscle: aggregate / crisis-map query. *Not* served via the chat-trace pipeline — served via a separate `/crisis-map` endpoint with the choropleth as the affordance. Click a district → drawer.

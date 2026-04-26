@@ -24,10 +24,10 @@ curl -sN -m 300 -X POST -o "$OUT/q1.sse" \
   -d '{"query":"Find the nearest facility in rural Bihar that can perform an emergency appendectomy and typically leverages part-time doctors."}' \
   "$BASE_URL/query"
 
-echo "=== q2: Mumbai oncology ==="
+echo "=== q2: Bihar 24/7 ICU verification ==="
 curl -sN -m 300 -X POST -o "$OUT/q2.sse" \
   -H 'Content-Type: application/json' \
-  -d '{"query":"Which hospitals in Mumbai should I trust for radiation oncology? A lot of listings claim it but I only want ones where the equipment and specialist roster actually back the claim up."}' \
+  -d '{"query":"Which Bihar hospitals can I trust for round-the-clock ICU care? A lot of listings advertise 24/7 emergency or ICU service but I only want ones where the description actually backs it up."}' \
   "$BASE_URL/query"
 
 echo "=== q3: PICU desert (crisis-map endpoint) ==="
