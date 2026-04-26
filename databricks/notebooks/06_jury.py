@@ -7,7 +7,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install openai tenacity boto3
+# MAGIC %pip install openai tenacity boto3 anthropic
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
