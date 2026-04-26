@@ -8,25 +8,24 @@ interface ToolCallNodeProps {
 }
 
 /**
- * Renders a tool invocation as a mono-typed node — input args summarized
- * inline, output_summary in the body. Spinner while running, check on done.
+ * Tool invocation card — mono-typeset, paired with a model-style tool pill.
+ * `output_summary` renders below in a code block; `duration_ms` ticks next
+ * to the heading. Mirrors the AgentStepNode visual rhythm so adjacent cards
+ * feel like part of the same timeline.
  */
 export function ToolCallNode({ event, finished }: ToolCallNodeProps) {
   const { tool, output_summary, duration_ms } = event.data;
   return (
-    <div className="trace-event">
+    <div className="trace-event step-card">
       <div className={"node " + (finished ? "done" : "spinner")} />
-      <div className="label">
-        Tool call
-        {duration_ms !== undefined && <span className="ts">· {Math.round(duration_ms)}ms</span>}
+      <div className="step-head">
+        <span className="step-heading">Tool call</span>
+        {duration_ms !== undefined && (
+          <span className="step-ts">· {Math.round(duration_ms)}ms</span>
+        )}
+        <span className="step-model tool">{tool}</span>
       </div>
-      <div
-        className="title"
-        style={{ fontFamily: "var(--mono)", fontSize: 12.5, color: "var(--fg-2)" }}
-      >
-        {tool}
-      </div>
-      {output_summary && <div className="tool-out">{output_summary}</div>}
+      {output_summary && <pre className="step-detail">{output_summary}</pre>}
     </div>
   );
 }

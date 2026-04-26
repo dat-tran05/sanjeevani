@@ -34,7 +34,7 @@ Claude extended-thinking text. Streams as deltas so the typewriter effect runs.
 
 ```json
 {"type":"agent_step_start","data":{"step_id":"intent","name":"intent","label":"Intent extraction · Haiku 4.5"}}
-{"type":"agent_step_end","data":{"step_id":"intent","name":"intent","summary":"Parsed intent: capability=emergency_surgery, region=Bihar, urgency=emergent","duration_ms":412}}
+{"type":"agent_step_end","data":{"step_id":"intent","name":"intent","summary":"Parsed intent: capability=emergency_surgery, region=Bihar, urgency=emergent","detail":"{\"state\":\"Bihar\",\"capability\":\"appendectomy\"}","duration_ms":412}}
 ```
 
 | Field | Type | Notes |
@@ -43,6 +43,7 @@ Claude extended-thinking text. Streams as deltas so the typewriter effect runs.
 | `name` | string | Internal node name (free-form). |
 | `label` | string | Human-readable label, e.g. `Intent extraction · Haiku 4.5`. |
 | `summary` | string? | Result line shown under the label on end. |
+| `detail` | string? | Mono-text body (SQL snippet, JSON, breakdown) — multi-line allowed. Renders in a code block under the summary. |
 | `duration_ms` | number? | Renders as `· 412ms` next to label. |
 
 ### `tool_call`

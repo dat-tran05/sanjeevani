@@ -64,6 +64,8 @@ export const DEMO_TRACE: TimedEvent[] = [
         name: "intent",
         summary:
           "Parsed intent: capability=emergency_surgery, region=Bihar, urgency=emergent, radius=80km",
+        detail:
+          '{"state":"Bihar","capability":"appendectomy","urgency":"emergency","setting":"rural","must_have":["surgery","anesthesia"]}',
         duration_ms: 600,
       },
     },
@@ -116,6 +118,8 @@ export const DEMO_TRACE: TimedEvent[] = [
         name: "rerank",
         summary:
           "Reranked 64 → top 12 by emergency-surgery relevance. Median rerank score Δ from BM25: +0.31. Top 3 candidates carry explicit emergency theatre citations.",
+        detail:
+          "Ranking 64 candidates by capability fit...\n→ Top 12 with rationale\n→ Median Δ vs BM25: +0.31",
         duration_ms: 900,
       },
     },
@@ -170,6 +174,8 @@ export const DEMO_TRACE: TimedEvent[] = [
         name: "aggregate",
         summary:
           "Synthesized proposals into ranked list. Both proposers agree on top 2. Vaishali ranking divergence flagged for jury review.",
+        detail:
+          "Both proposers agree on Sri Krishna as #1.\nReconciling positions 2-3...\n\nFinal ranking:\n1. Sri Krishna ★\n2. Darbhanga\n3. Vaishali (escalate)",
         duration_ms: 1000,
       },
     },

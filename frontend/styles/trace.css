@@ -44,6 +44,76 @@
   color: var(--fg-mute);
 }
 
+/* Retrieval funnel — top of trace panel, ported from design's funnel viz */
+.funnel {
+  border-bottom: 1px solid var(--line);
+  padding: 14px 20px 16px;
+  flex-shrink: 0;
+}
+.funnel-head {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+  margin-bottom: 10px;
+}
+.funnel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.funnel-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.28;
+  transition: opacity 600ms var(--ease-out);
+}
+.funnel-row.lit { opacity: 1; }
+
+.funnel-bar-wrap {
+  height: 6px;
+  position: relative;
+}
+.funnel-bar {
+  height: 100%;
+  border-radius: 1px;
+  background: var(--line-2);
+  transform-origin: left;
+  transition: background 480ms var(--ease-out), transform 480ms var(--ease-out);
+}
+.funnel-row.lit .funnel-bar {
+  background: var(--funnel-tone);
+}
+
+.funnel-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+}
+.funnel-count {
+  color: var(--funnel-tone);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+.funnel-row:not(.lit) .funnel-count {
+  color: var(--fg-mute);
+}
+.funnel-label {
+  color: var(--fg-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 9.5px;
+}
+
 .trace-stream {
   flex: 1;
   overflow-y: auto;
@@ -121,6 +191,102 @@
   gap: 8px;
 }
 .trace-event .label .ts { color: var(--fg-mute); opacity: 0.7; }
+
+/* ---- Step / tool card (design-spec layout) ---- */
+.step-card .step-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.step-card .step-heading {
+  font-size: 13.5px;
+  color: var(--fg);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.step-card .step-ts {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--fg-mute);
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.step-card .step-model {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: var(--neutral-06);
+  border: 1px solid var(--line);
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.step-card .step-model.tool {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--gold);
+  background: var(--gold-glow);
+  border-color: rgba(212, 166, 97, 0.30);
+}
+.step-card .step-summary {
+  font-size: 13px;
+  color: var(--fg-2);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+.step-card .step-detail {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  background: var(--neutral-03);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px 11px;
+  margin-top: 6px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  overflow-x: auto;
+}
+.step-card .step-thinking { margin-top: 6px; }
+.step-card .step-thinking-toggle {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  padding: 4px 0;
+}
+.step-card .step-thinking-toggle::-webkit-details-marker { display: none; }
+.step-card .step-thinking-toggle::before {
+  content: "▸ ";
+  display: inline-block;
+  margin-right: 2px;
+  transition: transform var(--t-fast) var(--ease);
+}
+.step-card details[open] .step-thinking-toggle::before {
+  content: "▾ ";
+}
+.step-card .step-thinking-body {
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.55;
+  color: var(--fg-2);
+  background: var(--neutral-03);
+  border-left: 2px solid var(--line-2);
+  padding: 10px 12px;
+  border-radius: 0 6px 6px 0;
+  margin-top: 4px;
+}
 
 .trace-event .title {
   font-size: 14px;
@@ -437,6 +603,53 @@
   color: var(--gold);
   font-weight: 600;
 }
+
+/* Top pick callout — gold-tinted note under the ranked list */
+.top-pick {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  margin: 22px 0 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--gold-glow) 0%, transparent 70%);
+  border: 1px solid rgba(212, 166, 97, 0.35);
+  animation: trace-in 380ms var(--ease-out);
+}
+.top-pick-glyph {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--gold-glow);
+  color: var(--gold);
+  border: 1px solid rgba(212, 166, 97, 0.45);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.top-pick-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.top-pick-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 600;
+}
+.top-pick-body p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--fg-2);
+  line-height: 1.55;
+}
+.top-pick-body strong { color: var(--fg); font-weight: 600; }
 
 /* Why-not-these */
 .wnt {

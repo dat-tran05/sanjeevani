@@ -79,6 +79,24 @@ function ExplorerInner() {
             />
           ))}
 
+          {liveFacilities[0] && (
+            <div className="top-pick" role="note">
+              <span className="top-pick-glyph" aria-hidden>
+                ★
+              </span>
+              <div className="top-pick-body">
+                <span className="top-pick-eyebrow">Top pick</span>
+                <p>
+                  <strong>{liveFacilities[0].name}</strong> — three of three
+                  judges agree the description cites a 24-hour emergency
+                  theatre with on-call general surgery and explicit
+                  laparoscopic appendectomy. Strongest documented capability
+                  among the rural Bihar candidates.
+                </p>
+              </div>
+            </div>
+          )}
+
           <WhyNotThese />
 
           <div

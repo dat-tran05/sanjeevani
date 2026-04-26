@@ -6,6 +6,7 @@ import type { TaggedEvent } from "@/lib/hooks/use-event-stream";
 import { TraceEvent } from "./TraceEvent";
 import { AgentStepNode } from "./AgentStepNode";
 import { ProposalsNode } from "./ProposalsNode";
+import { RetrievalFunnel } from "./RetrievalFunnel";
 
 type ModelProposalEv = Extract<StreamEvent, { type: "model_proposal" }>;
 type AgentStepStartEv = Extract<StreamEvent, { type: "agent_step_start" }>;
@@ -103,14 +104,12 @@ export function TraceStream({ events, totalExpected }: TraceStreamProps) {
           {totalExpected ? `/${totalExpected}` : ""}
         </span>
       </div>
+      <RetrievalFunnel events={events} />
       <div className="trace-stream" ref={ref} aria-live="polite" aria-atomic="false">
         {items.map((item) => {
           const node =
             item.kind === "agent_step" ? (
-              <AgentStepNode
-                event={item.end ?? item.start}
-                finished={!!item.end}
-              />
+              <AgentStepNode start={item.start} end={item.end} />
             ) : item.kind === "proposals" ? (
               <ProposalsNode events={item.events} />
             ) : (
