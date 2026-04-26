@@ -88,9 +88,11 @@ def tiebreak_one(row) -> dict:
         description=(row.description or "(none)")[:2000],
         supp=row.supp, part=row.part, uns=row.uns,
     )
+    # max_tokens MUST be > thinking budget (Anthropic requirement). With
+    # THINKING_BUDGET=3000 we leave 1500 headroom for the JSON response.
     resp = client.messages.create(
         model=TIEBREAKER_MODEL,
-        max_tokens=2000,
+        max_tokens=THINKING_BUDGET + 1500,
         thinking={"type": "enabled", "budget_tokens": THINKING_BUDGET},
         messages=[{"role": "user", "content": prompt}],
     )
