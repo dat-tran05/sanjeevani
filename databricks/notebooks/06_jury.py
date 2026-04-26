@@ -1,16 +1,18 @@
-# Databricks notebook source
-# MAGIC %md
-# MAGIC # 06 — Multi-Model Jury (Verifiable Consensus)
-# MAGIC For each row in `silver.facility_claims`, three independent judges verdict the claim
-# MAGIC against the facility's source text. Writes `gold.trust_verdicts` (3 rows per claim).
-# MAGIC Idempotent on (claim_id, judge_model).
+# Install required packages if not already installed
+try:
+    import anthropic
+except ModuleNotFoundError:
+    %pip install openai tenacity boto3 anthropic
+    dbutils.library.restartPython()
 
-# COMMAND ----------
-
-# MAGIC %pip install openai tenacity boto3 anthropic
-# MAGIC dbutils.library.restartPython()
-
-# COMMAND ----------
+import os
+import json
+import time
+import boto3
+from datetime import datetime, timezone
+from openai import OpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+import anthropic
 
 CATALOG = "sanjeevani"
 
@@ -23,8 +25,6 @@ JUDGES = [
 
 # Throttle Free Edition QPS
 SLEEP_BETWEEN_CLAIMS = 0.8
-
-# COMMAND ----------
 
 # Ensure target table exists (idempotent)
 spark.sql(f"""
@@ -67,16 +67,6 @@ for r in todo:
 
 print(f"Claims needing one or more judges: {len(claims_by_id)}")
 
-# COMMAND ----------
-
-import os
-import json
-import time
-import boto3
-from datetime import datetime, timezone
-from openai import OpenAI
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-
 # Databricks Model Serving client (for Llama, Qwen)
 _workspace = spark.conf.get("spark.databricks.workspaceUrl")
 _dbrx_token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
@@ -91,7 +81,6 @@ AWS_BEARER_TOKEN_BEDROCK = dbutils.secrets.get(scope="sanjeevani", key="AWS_BEAR
 AWS_REGION = "us-east-1"
 os.environ["AWS_BEARER_TOKEN_BEDROCK"] = AWS_BEARER_TOKEN_BEDROCK
 os.environ["AWS_REGION"] = AWS_REGION
-import anthropic
 bedrock_client = anthropic.AnthropicBedrock(aws_region=AWS_REGION)
 
 
@@ -125,7 +114,7 @@ def judge_one(judge: dict, claim_row) -> dict:
     prompt = JURY_PROMPT.format(
         claim_text=claim_row.claim_text,
         facility_name=claim_row.name or "(unknown)",
-        description=(claim_row.description or "(none)")[:2000],  # cap to keep tokens reasonable
+        description=(claim_row.description or "(none)")[:2000],
     )
     if judge["via"] == "bedrock":
         resp = bedrock_client.messages.create(
@@ -155,8 +144,6 @@ def judge_one(judge: dict, claim_row) -> dict:
         "quote": parsed.get("quote", "")[:500],
     }
 
-
-# COMMAND ----------
 
 verdicts_records = []
 failures = []
@@ -191,8 +178,6 @@ for i, cid in enumerate(claim_ids):
 
 print(f"\nVerdicts: {len(verdicts_records)}, Failed: {len(failures)}")
 
-# COMMAND ----------
-
 if verdicts_records:
     new_df = spark.createDataFrame(verdicts_records)
     new_df.createOrReplaceTempView("new_verdicts")
@@ -206,8 +191,6 @@ if verdicts_records:
     """)
 
     print(f"MERGE complete. Total verdicts: {spark.table(f'{CATALOG}.gold.trust_verdicts').count()}")
-
-# COMMAND ----------
 
 # Sanity check: agreement breakdown across claims
 display(spark.sql(f"""

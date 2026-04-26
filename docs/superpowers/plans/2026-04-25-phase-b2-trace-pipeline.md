@@ -1682,7 +1682,7 @@ def planner_node_streaming(query_text: str) -> Iterator[StreamEvent | tuple[str,
     for kind, chunk in stream_with_thinking(
         PLANNER_PROMPT.format(query=query_text),
         thinking_budget=1500,
-        max_tokens=1200,
+        max_tokens=3000,  # MUST exceed thinking_budget (Anthropic requirement)
     ):
         if kind == "thinking":
             prose_chunks.append(chunk)

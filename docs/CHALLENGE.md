@@ -59,12 +59,12 @@ The agent must be able to:
 
 ## 6. Evaluation Criteria
 
-| Weight | Criterion | What's evaluated |
-| --- | --- | --- |
-| 35% | **Discovery and Verification** | How reliably the agent extracts data from 10k rows. Since there is no ground truth, agents that double-check their own work are valued. |
-| 30% | **IDP Innovation** | How well the solution synthesizes information from messy, free-form Indian facility notes. |
-| 25% | **Social Impact and Utility** | Does the tool effectively identify medical deserts and provide actionable insights for NGO planners? |
-| 10% | **UX and Transparency** | Is the interface intuitive? Does it show its Chain of Thought so a human can trust the output? |
+| Weight | Criterion                            | What's evaluated                                                                                                                        |
+| ------ | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 35%    | **Discovery and Verification** | How reliably the agent extracts data from 10k rows. Since there is no ground truth, agents that double-check their own work are valued. |
+| 30%    | **IDP Innovation**             | How well the solution synthesizes information from messy, free-form Indian facility notes.                                              |
+| 25%    | **Social Impact and Utility**  | Does the tool effectively identify medical deserts and provide actionable insights for NGO planners?                                    |
+| 10%    | **UX and Transparency**        | Is the interface intuitive? Does it show its Chain of Thought so a human can trust the output?                                          |
 
 ## 7. Why It Matters
 
