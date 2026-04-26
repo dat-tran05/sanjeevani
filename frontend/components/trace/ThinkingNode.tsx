@@ -16,8 +16,8 @@ interface ThinkingNodeProps {
 
 /**
  * Renders a Claude extended-thinking delta as a gray italic block with a
- * typewriter effect that lands on the full text. Once `finished`, the cursor
- * disappears and the full text is shown.
+ * typewriter effect. When `finished`, the cursor disappears and the full
+ * text is shown directly (no animation).
  */
 export function ThinkingNode({
   event,
@@ -26,23 +26,32 @@ export function ThinkingNode({
   durationMs,
 }: ThinkingNodeProps) {
   const fullText = event.data.text;
-  const [shown, setShown] = useState(finished ? fullText : "");
+  // Animated text only updated by the typewriter interval; the rendered text
+  // is `fullText` once finished, so setState on finished isn't needed.
+  const [animated, setAnimated] = useState("");
 
   useEffect(() => {
-    if (finished) {
-      setShown(fullText);
-      return;
-    }
+    if (finished) return;
     const dur = durationMs ?? Math.max(400, fullText.length * 12);
     const speed = Math.max(8, Math.floor(dur / fullText.length));
+    // Animation always starts from `animated === ""` because each new
+    // thinking_delta event mounts a fresh ThinkingNode (TraceStream keys by
+    // event index), so no explicit reset is needed.
     let i = 0;
     const iv = setInterval(() => {
       i += 2;
-      setShown(fullText.slice(0, i));
-      if (i >= fullText.length) clearInterval(iv);
+      if (i >= fullText.length) {
+        setAnimated(fullText);
+        clearInterval(iv);
+      } else {
+        setAnimated(fullText.slice(0, i));
+      }
     }, speed);
     return () => clearInterval(iv);
   }, [fullText, finished, durationMs]);
+
+  const shown = finished ? fullText : animated;
+  const showCursor = !finished && shown.length < fullText.length;
 
   return (
     <div className="trace-event">
@@ -57,7 +66,7 @@ export function ThinkingNode({
         </div>
         <div className="text">
           {shown}
-          {!finished && shown.length < fullText.length && <span className="cursor" />}
+          {showCursor && <span className="cursor" />}
         </div>
       </div>
     </div>

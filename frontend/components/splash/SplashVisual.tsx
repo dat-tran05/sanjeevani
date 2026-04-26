@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { SPLASH_STATES } from "@/lib/demo/splash-states";
 
 interface Pin {
@@ -11,20 +11,30 @@ interface Pin {
   sz: number;
 }
 
+function generatePins(): Pin[] {
+  const out: Pin[] = [];
+  for (let i = 0; i < 240; i++) {
+    const s = SPLASH_STATES[Math.floor(Math.random() * SPLASH_STATES.length)]!;
+    out.push({
+      id: i,
+      x: s.cx + (Math.random() - 0.5) * 60,
+      y: s.cy + (Math.random() - 0.5) * 60,
+      delay: Math.random() * 1.2,
+      sz: Math.random() * 1.5 + 0.8,
+    });
+  }
+  return out;
+}
+
 export function SplashVisual() {
-  const pins = useMemo<Pin[]>(() => {
-    const out: Pin[] = [];
-    for (let i = 0; i < 240; i++) {
-      const s = SPLASH_STATES[Math.floor(Math.random() * SPLASH_STATES.length)];
-      out.push({
-        id: i,
-        x: s.cx + (Math.random() - 0.5) * 60,
-        y: s.cy + (Math.random() - 0.5) * 60,
-        delay: Math.random() * 1.2,
-        sz: Math.random() * 1.5 + 0.8,
-      });
-    }
-    return out;
+  // Pins generated client-side after mount — Math.random() is impure so it can't
+  // run during render (would also cause an SSR hydration mismatch). The lint
+  // rule warns against setState-in-effect, but a one-shot post-mount init for
+  // client-only random data is the canonical pattern here.
+  const [pins, setPins] = useState<Pin[]>([]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPins(generatePins());
   }, []);
 
   return (
