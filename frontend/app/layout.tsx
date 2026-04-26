@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
 import { TopBar } from "@/components/shell/TopBar";
+import { FacilityDrawer } from "@/components/drawer/FacilityDrawer";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -37,8 +39,13 @@ export default function RootLayout({
       className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body data-mode="dark" data-palette="warm" data-display="fraunces" data-topo="on">
-        <TopBar />
+        <Suspense fallback={null}>
+          <TopBar />
+        </Suspense>
         {children}
+        <Suspense fallback={null}>
+          <FacilityDrawer />
+        </Suspense>
       </body>
     </html>
   );
