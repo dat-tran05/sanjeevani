@@ -14,7 +14,7 @@ from app.agents.graph import run_query_stream
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # MLflow autolog (one line — captures every LangGraph node trace)
+    # MLflow autolog
     try:
         import mlflow
         mlflow.langchain.autolog()
@@ -23,6 +23,12 @@ async def lifespan(app: FastAPI):
         print("[startup] MLflow autolog enabled")
     except Exception as e:
         print(f"[startup] MLflow autolog skipped: {e}")
+    # Load in-process retrieval index (BM25 + dense)
+    try:
+        from app.retrieval.index import load_index
+        load_index()
+    except Exception as e:
+        print(f"[startup] retrieval index load failed: {e}")
     yield
 
 
