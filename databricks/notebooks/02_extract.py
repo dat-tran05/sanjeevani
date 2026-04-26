@@ -316,6 +316,58 @@ if claims_records:
 
 # COMMAND ----------
 
+# MAGIC %md ## Step 5: Backfill claims for already-extracted rows
+# MAGIC Re-derives claims from rows in `silver.facilities_extracted` that don't yet have any
+# MAGIC claims (e.g., rows extracted in an earlier run before the claims pipeline existed).
+# MAGIC Cheap (no LLM calls) and idempotent.
+
+# COMMAND ----------
+
+existing = spark.sql(f"""
+    SELECT e.facility_id, e.explicit_capabilities, e.implicit_capabilities,
+           e.surgery_capable, e.emergency_24_7, e.staff_mentioned,
+           e.equipment_mentioned, e.operating_hours_text, e.urgent_care_signals,
+           p.description
+    FROM {CATALOG}.silver.facilities_extracted e
+    JOIN {CATALOG}.silver.facilities_parsed p USING (facility_id)
+    LEFT ANTI JOIN (
+        SELECT DISTINCT facility_id FROM {CATALOG}.silver.facility_claims
+    ) c USING (facility_id)
+""").collect()
+
+print(f"Facilities needing claim backfill: {len(existing)}")
+
+backfill_records = []
+for row in existing:
+    extracted = ExtractedCapabilities(
+        explicit_capabilities=list(row.explicit_capabilities or []),
+        implicit_capabilities=list(row.implicit_capabilities or []),
+        surgery_capable=bool(row.surgery_capable or False),
+        emergency_24_7=bool(row.emergency_24_7 or False),
+        staff_mentioned=list(row.staff_mentioned or []),
+        equipment_mentioned=list(row.equipment_mentioned or []),
+        operating_hours_text=row.operating_hours_text,
+        urgent_care_signals=list(row.urgent_care_signals or []),
+    )
+    for c in derive_claims(row.facility_id, extracted, row.description):
+        backfill_records.append(c)
+
+print(f"Backfilled claims: {len(backfill_records)}")
+
+if backfill_records:
+    bf_df = spark.createDataFrame(backfill_records)
+    bf_df.createOrReplaceTempView("backfill_claims")
+    spark.sql(f"""
+        MERGE INTO {CATALOG}.silver.facility_claims AS target
+        USING backfill_claims AS source
+        ON target.claim_id = source.claim_id
+        WHEN MATCHED THEN UPDATE SET *
+        WHEN NOT MATCHED THEN INSERT *
+    """)
+    print(f"Total claims after backfill: {spark.table(f'{CATALOG}.silver.facility_claims').count()}")
+
+# COMMAND ----------
+
 # Sanity check
 display(spark.sql(f"""
     SELECT p.name, p.state, p.city, e.surgery_capable, e.emergency_24_7,
