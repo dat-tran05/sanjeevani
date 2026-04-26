@@ -1,15 +1,21 @@
 "use client";
 
-import { HERO_QUERIES } from "@/lib/demo/hero-queries";
+import type { HeroQuery } from "@/lib/types";
 
 interface QueryBlockProps {
+  queries: HeroQuery[];
   activeQueryId: string;
   onQueryChange: (id: string) => void;
   onReplay: () => void;
 }
 
-export function QueryBlock({ activeQueryId, onQueryChange, onReplay }: QueryBlockProps) {
-  const activeQuery = HERO_QUERIES.find((q) => q.id === activeQueryId);
+export function QueryBlock({
+  queries,
+  activeQueryId,
+  onQueryChange,
+  onReplay,
+}: QueryBlockProps) {
+  const activeQuery = queries.find((q) => q.id === activeQueryId);
   const text = activeQuery?.text ?? "";
 
   return (
@@ -32,7 +38,7 @@ export function QueryBlock({ activeQueryId, onQueryChange, onReplay }: QueryBloc
         <input className="query-input" value={text} readOnly />
       </div>
       <div className="query-suggest">
-        {HERO_QUERIES.map((q) => (
+        {queries.map((q) => (
           <button
             key={q.id}
             className={"suggest-chip" + (q.id === activeQueryId ? " active" : "")}

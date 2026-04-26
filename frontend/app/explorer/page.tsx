@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { TopoBg } from "@/components/shell/TopoBg";
 import { QueryBlock } from "@/components/explorer/QueryBlock";
@@ -13,20 +13,39 @@ import { useEventStream } from "@/lib/hooks/use-event-stream";
 import { useDrawer } from "@/lib/hooks/use-drawer";
 import { HERO_QUERIES } from "@/lib/demo/hero-queries";
 import { FACILITIES, HERO_FACILITY_IDS } from "@/lib/demo/facilities";
-import type { FacilityCitation, RecommendedFacility } from "@/lib/types";
+import type { FacilityCitation, HeroQuery, RecommendedFacility } from "@/lib/types";
 
 function ExplorerInner() {
   const searchParams = useSearchParams();
   const forceDemo = searchParams.get("demo") === "1";
+  const urlQuery = searchParams.get("q");
   const speedParam = Number(searchParams.get("speed") ?? "1");
   const speed = Number.isFinite(speedParam) && speedParam > 0 ? speedParam : 1;
 
-  const [activeQueryId, setActiveQueryId] = useState(HERO_QUERIES[0]?.id ?? "");
+  // Merged hero query list — when the user lands here from /atlas's
+  // "Ask about this district" CTA, prepend that query so it appears as
+  // a chip and is selected on first paint.
+  const queries = useMemo<HeroQuery[]>(() => {
+    if (!urlQuery) return HERO_QUERIES;
+    const fromAtlas: HeroQuery = {
+      id: "from-atlas",
+      label: "from atlas",
+      text: urlQuery,
+      answerLine: "Pulled from the Crisis Map drill-down — re-running through the same agent pipeline.",
+    };
+    return [fromAtlas, ...HERO_QUERIES];
+  }, [urlQuery]);
+
+  // First-paint pin: if there's a from-atlas entry, it leads. The component
+  // is keyed on `?q=` by ExplorerKeyed below, so URL changes remount the
+  // tree and re-run this initializer with fresh queries.
+  const [activeQueryId, setActiveQueryId] = useState(queries[0]?.id ?? "");
+
   const { events, run } = useEventStream({ forceDemo, speed });
   const { openDrawer } = useDrawer();
 
   const activeQuery =
-    HERO_QUERIES.find((q) => q.id === activeQueryId) ?? HERO_QUERIES[0];
+    queries.find((q) => q.id === activeQueryId) ?? queries[0];
 
   useEffect(() => {
     if (activeQuery) void run(activeQuery.text);
@@ -57,6 +76,7 @@ function ExplorerInner() {
       <TopoBg />
       <div className="explorer-main">
         <QueryBlock
+          queries={queries}
           activeQueryId={activeQueryId}
           onQueryChange={setActiveQueryId}
           onReplay={onReplay}
@@ -119,10 +139,17 @@ function ExplorerInner() {
   );
 }
 
+function ExplorerKeyed() {
+  const searchParams = useSearchParams();
+  // Keying on `?q=` so a navigation from /atlas's CTA reinitializes
+  // ExplorerInner's activeQueryId without a setState-in-effect.
+  return <ExplorerInner key={searchParams.get("q") ?? ""} />;
+}
+
 export default function ExplorerPage() {
   return (
     <Suspense fallback={null}>
-      <ExplorerInner />
+      <ExplorerKeyed />
     </Suspense>
   );
 }

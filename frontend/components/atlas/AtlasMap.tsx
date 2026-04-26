@@ -15,14 +15,29 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import type { GeoJSONSource, MapLayerMouseEvent } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { MapboxOverlay } from "@deck.gl/mapbox";
+import { ScatterplotLayer } from "@deck.gl/layers";
+import type { PickingInfo } from "@deck.gl/core";
 
-import type { CapabilityId } from "@/lib/types";
+import type { CapabilityId, MapFacility } from "@/lib/types";
 import { DISTRICTS_GEO, STATE_ID_OF } from "@/lib/demo/districts-geo";
 import {
+  enrichDistrictPoints,
   enrichDistricts,
   enrichStates,
+  loadIndiaGeo,
   setupLayers,
 } from "@/lib/maps/maplibre-setup";
+import { useDrawer } from "@/lib/hooks/use-drawer";
+
+const FACILITY_COLOR_BY_TYPE: Record<string, [number, number, number, number]> = {
+  hospital: [212, 164, 106, 230], // gold/amber — high-acuity
+  clinic:   [148, 188, 122, 200], // green
+  dentist:  [192, 125, 74, 200],  // orange
+  doctor:   [180, 180, 180, 200], // gray
+  pharmacy: [120, 130, 140, 180], // muted
+  other:    [120, 130, 140, 180],
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -75,15 +90,19 @@ export function AtlasMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
+  const { openDrawer } = useDrawer();
+
   // Latest-callback refs so the map's load handler never closes over stale
   // props. Updated on every render.
   const onHoverRef = useRef(onHover);
   const onDistrictSelectRef = useRef(onDistrictSelect);
   const onStateFocusRef = useRef(onStateFocus);
+  const openDrawerRef = useRef(openDrawer);
   useEffect(() => {
     onHoverRef.current = onHover;
     onDistrictSelectRef.current = onDistrictSelect;
     onStateFocusRef.current = onStateFocus;
+    openDrawerRef.current = openDrawer;
   });
 
   // -------------------------------------------------------------------------
@@ -97,18 +116,9 @@ export function AtlasMap({
     const map = new maplibregl.Map({
       container,
       canvasContextAttributes: { preserveDrawingBuffer: true },
-      style: {
-        version: 8,
-        sources: {},
-        layers: [
-          {
-            id: "bg",
-            type: "background",
-            paint: { "background-color": "#070D10" },
-          },
-        ],
-        glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-      },
+      // OpenFreeMap dark — vector basemap with land/water/roads/labels.
+      // No API key, MapLibre-native, ships Noto fonts via its glyphs URL.
+      style: "https://tiles.openfreemap.org/styles/dark",
       center: [80, 22],
       zoom: 4.0,
       minZoom: 3.2,
@@ -117,13 +127,52 @@ export function AtlasMap({
         [58, 2],
         [102, 40],
       ],
-      attributionControl: false,
+      attributionControl: { compact: true },
       pitchWithRotate: false,
       dragRotate: false,
     });
 
-    map.on("load", () => {
+    map.on("load", async () => {
+      // Real Datameet/GADM polygons must be in the module-level cache before
+      // setupLayers wires them into sources.
+      await loadIndiaGeo();
       setupLayers(map, { initialDistrictId: selectedDistrictId });
+
+      // ---- Facility pins (deck.gl ScatterplotLayer over 10k facilities) ----
+      try {
+        const res = await fetch("/facilities.min.json");
+        const facilities = (await res.json()) as MapFacility[];
+        const overlay = new MapboxOverlay({
+          interleaved: true,
+          layers: [
+            new ScatterplotLayer<MapFacility>({
+              id: "facility-pins",
+              data: facilities,
+              getPosition: (f: MapFacility) => [f.lng, f.lat],
+              getRadius: 1500,
+              radiusUnits: "meters",
+              radiusMinPixels: 1.5,
+              radiusMaxPixels: 6,
+              stroked: true,
+              lineWidthMinPixels: 0.5,
+              getLineColor: [11, 20, 23, 220],
+              getFillColor: (f: MapFacility) =>
+                FACILITY_COLOR_BY_TYPE[f.type] ?? FACILITY_COLOR_BY_TYPE.other,
+              pickable: true,
+              autoHighlight: true,
+              highlightColor: [212, 164, 106, 240],
+              onClick: (info: PickingInfo<MapFacility>) => {
+                if (info.object) {
+                  openDrawerRef.current(info.object.id);
+                }
+              },
+            }),
+          ],
+        });
+        map.addControl(overlay);
+      } catch (err) {
+        console.warn("[atlas] failed to load facility pins", err);
+      }
 
       // ---- State hover ----
       map.on("mousemove", "state-fill", (e: MapLayerMouseEvent) => {
@@ -256,10 +305,12 @@ export function AtlasMap({
     if (!map) return;
     const update = () => {
       try {
-        const src = map.getSource("states") as GeoJSONSource | undefined;
-        src?.setData(enrichStates(capability));
+        const sSrc = map.getSource("states") as GeoJSONSource | undefined;
+        sSrc?.setData(enrichStates(capability));
+        const dpSrc = map.getSource("districts-poly") as GeoJSONSource | undefined;
+        dpSrc?.setData(enrichDistricts(capability));
         const dSrc = map.getSource("districts") as GeoJSONSource | undefined;
-        dSrc?.setData(enrichDistricts(capability));
+        dSrc?.setData(enrichDistrictPoints(capability));
       } catch {
         // Ignore — map may not be styled yet.
       }
@@ -280,6 +331,16 @@ export function AtlasMap({
     const vis = (v: boolean): "visible" | "none" => (v ? "visible" : "none");
     try {
       map.setLayoutProperty("state-fill", "visibility", vis(layers.choropleth));
+      map.setLayoutProperty(
+        "district-poly-fill",
+        "visibility",
+        vis(layers.choropleth),
+      );
+      map.setLayoutProperty(
+        "district-poly-line",
+        "visibility",
+        vis(layers.choropleth),
+      );
       map.setLayoutProperty(
         "state-desert-line",
         "visibility",

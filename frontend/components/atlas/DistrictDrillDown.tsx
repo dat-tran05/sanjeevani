@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { CapabilityId, DistrictPoint } from "@/lib/types";
 import { CAPABILITIES } from "@/lib/demo/capability-bias";
 import { FACILITIES } from "@/lib/demo/facilities";
@@ -152,6 +153,16 @@ export function DistrictDrillDown({
             district.id !== "BGS" &&
             "Bordering districts share the same trust profile — gap is regional, not local."}
         </div>
+
+        <Link
+          href={`/explorer?q=${encodeURIComponent(
+            `Verified ${capLabel.toLowerCase()} facilities in ${district.name}`,
+          )}`}
+          className="dd-cta"
+        >
+          Ask about this district
+          <span aria-hidden="true">→</span>
+        </Link>
       </div>
     </div>
   );
