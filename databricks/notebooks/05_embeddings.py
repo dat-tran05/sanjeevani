@@ -5,7 +5,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install openai
+# MAGIC %pip install openai tenacity
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -40,8 +40,10 @@ print(f"To embed: {len(todo)} rows")
 
 import os
 import json
+import time
 from datetime import datetime, timezone
 from openai import OpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 _workspace = spark.conf.get("spark.databricks.workspaceUrl")
 client = OpenAI(
@@ -61,16 +63,24 @@ def build_text(row) -> str:
     return " ".join(p for p in parts if p).strip()
 
 
-# Batch in groups of 16 (gte-large-en supports batched inputs)
+# Free Edition has tight QPS caps on the embeddings endpoint.
+# Strategy: small batches + sleep between calls + exp-backoff retry on 429.
+@retry(
+    stop=stop_after_attempt(6),
+    wait=wait_exponential(multiplier=2, min=2, max=60),
+    retry=retry_if_exception_type(Exception),
+)
+def embed_batch(texts: list[str]):
+    return client.embeddings.create(model=EMBED_ENDPOINT, input=texts)
+
+
 records = []
-BATCH = 16
+BATCH = 8                # smaller batches reduce per-call work
+SLEEP_BETWEEN = 1.5      # seconds between batches; throttle below QPS cap
 for start in range(0, len(todo), BATCH):
     chunk = todo[start:start + BATCH]
     texts = [build_text(r) for r in chunk]
-    resp = client.embeddings.create(
-        model=EMBED_ENDPOINT,
-        input=texts,
-    )
+    resp = embed_batch(texts)
     for r, item in zip(chunk, resp.data):
         records.append({
             "facility_id": r.facility_id,
@@ -79,6 +89,8 @@ for start in range(0, len(todo), BATCH):
             "embedded_at": datetime.now(timezone.utc),
         })
     print(f"  {min(start + BATCH, len(todo))}/{len(todo)}")
+    if start + BATCH < len(todo):
+        time.sleep(SLEEP_BETWEEN)
 
 print(f"Embedded: {len(records)}")
 
