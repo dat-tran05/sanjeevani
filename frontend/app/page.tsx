@@ -1,11 +1,14 @@
-// Placeholder — replaced by the Splash screen in Task T11.
+import { TopoBg } from "@/components/shell/TopoBg";
+import { SplashHero } from "@/components/splash/SplashHero";
+import { SplashVisual } from "@/components/splash/SplashVisual";
+
 export default function HomePage() {
   return (
     <div className="splash">
-      <div className="splash-canvas" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ fontFamily: "var(--display)", fontSize: 32, fontStyle: "italic", color: "var(--fg-mute)" }}>
-          Splash coming soon…
-        </p>
+      <TopoBg />
+      <div className="splash-canvas">
+        <SplashHero />
+        <SplashVisual />
       </div>
     </div>
   );
