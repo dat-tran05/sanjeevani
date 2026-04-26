@@ -1,0 +1,123 @@
+/* ========================================================================
+   Sanjeevani — Design Tokens (palettes, modes, motion)
+   Ported verbatim from the Claude Designs handoff (styles.css §Tokens).
+   See docs/superpowers/specs/2026-04-25-sanjeevani-design-wireup.md.
+   ====================================================================== */
+
+:root {
+  /* Palette: Warm civic (default) */
+  --ink: #0D1A1A;
+  --ink-2: #122322;
+  --ink-3: #18302C;
+  --ink-line: #213D38;
+  --ink-line-2: #2C4F47;
+
+  --paper: #F5F1EA;
+  --paper-2: #EDE6D8;
+  --paper-3: #E1D7C2;
+
+  --green: #2BB673;
+  --green-deep: #1F8A56;
+  --green-soft: #6FCFA0;
+  --green-glow: rgba(43, 182, 115, 0.18);
+
+  --gold: #D4A661;
+  --gold-deep: #B5853C;
+  --gold-soft: #E8C58C;
+  --gold-glow: rgba(212, 166, 97, 0.22);
+
+  --crimson: #C04A3F;
+  --crimson-deep: #8E322A;
+  --crimson-glow: rgba(192, 74, 63, 0.20);
+
+  --ochre: #B8732B;
+  --ochre-deep: #8A4F1A;
+
+  --neutral-100: rgba(245, 241, 234, 1.0);
+  --neutral-80: rgba(245, 241, 234, 0.80);
+  --neutral-60: rgba(245, 241, 234, 0.60);
+  --neutral-40: rgba(245, 241, 234, 0.40);
+  --neutral-20: rgba(245, 241, 234, 0.20);
+  --neutral-10: rgba(245, 241, 234, 0.10);
+  --neutral-06: rgba(245, 241, 234, 0.06);
+  --neutral-03: rgba(245, 241, 234, 0.03);
+
+  /* Mode-resolved (dark default) */
+  --bg: var(--ink);
+  --bg-2: var(--ink-2);
+  --bg-3: var(--ink-3);
+  --line: var(--ink-line);
+  --line-2: var(--ink-line-2);
+  --fg: var(--neutral-100);
+  --fg-2: var(--neutral-80);
+  --fg-3: var(--neutral-60);
+  --fg-mute: var(--neutral-40);
+
+  /* Type — bound to next/font variables in Task 3 */
+  --display: "Fraunces", "Tiempos Headline", Georgia, serif;
+  --sans: "Inter", "Söhne", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-fast: 120ms;
+  --t-med: 220ms;
+  --t-slow: 380ms;
+
+  /* Radii / shadow */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.18);
+  --shadow-2: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 18px 48px rgba(0, 0, 0, 0.32);
+}
+
+/* ----- Light mode ----- */
+[data-mode="light"] {
+  --bg: var(--paper);
+  --bg-2: #EFEADD;
+  --bg-3: #E5DCC6;
+  --line: rgba(13, 26, 26, 0.10);
+  --line-2: rgba(13, 26, 26, 0.18);
+  --fg: #14211F;
+  --fg-2: rgba(20, 33, 31, 0.78);
+  --fg-3: rgba(20, 33, 31, 0.58);
+  --fg-mute: rgba(20, 33, 31, 0.38);
+}
+
+/* ----- Palette: Clinical (cooler, more restrained) ----- */
+[data-palette="clinical"] {
+  --ink: #0B1417;
+  --ink-2: #11191C;
+  --ink-3: #182328;
+  --ink-line: #1F2D32;
+  --ink-line-2: #2A3D43;
+  --green: #34C58A;
+  --green-deep: #1F9968;
+  --gold: #BFA46A;
+}
+
+/* ----- Palette: Earthy (more ochre/copper) ----- */
+[data-palette="earthy"] {
+  --ink: #161210;
+  --ink-2: #1F1814;
+  --ink-3: #2A2018;
+  --ink-line: #382B20;
+  --ink-line-2: #4A3A2A;
+  --paper: #F2EBDB;
+  --paper-2: #E9DEC2;
+  --green: #69A86A;
+  --gold: #D89554;
+  --ochre: #C9701E;
+}
+
+/* ----- Display font swap ----- */
+[data-display="sectra"] {
+  --display: "DM Serif Display", "GT Sectra", Georgia, serif;
+}
+[data-display="tiempos"] {
+  --display: "Newsreader", "Tiempos Headline", Georgia, serif;
+}
