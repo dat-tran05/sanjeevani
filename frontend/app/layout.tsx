@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Fraunces, Inter, JetBrains_Mono } from "next/font/google";
+import { TopBar } from "@/components/shell/TopBar";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -36,6 +37,7 @@ export default function RootLayout({
       className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable}`}
     >
       <body data-mode="dark" data-palette="warm" data-display="fraunces" data-topo="on">
+        <TopBar />
         {children}
       </body>
     </html>
