@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import type { CapabilityId, DistrictPoint, StateGeo } from "@/lib/types";
 import { CapabilitySegmented } from "@/components/atlas/CapabilitySegmented";
 import { LayerToggles } from "@/components/atlas/LayerToggles";
@@ -44,7 +44,7 @@ const INITIAL_LAYERS: LayerState = {
   deserts: true,
 };
 
-export default function AtlasPage() {
+function AtlasInner() {
   const [capability, setCapability] = useState<CapabilityId>("emergency");
   const [selectedDistrictId, setSelectedDistrictId] = useState<string>("MZN");
   const [focusedState, setFocusedState] = useState<string | null>(null);
@@ -95,5 +95,13 @@ export default function AtlasPage() {
       </div>
       <DistrictDrillDown district={selDistrict} capability={capability} />
     </div>
+  );
+}
+
+export default function AtlasPage() {
+  return (
+    <Suspense fallback={<div className="atlas" />}>
+      <AtlasInner />
+    </Suspense>
   );
 }
