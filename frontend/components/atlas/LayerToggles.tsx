@@ -3,6 +3,7 @@ interface LayerTogglesValue {
   pins: boolean;
   labels: boolean;
   deserts: boolean;
+  verifiedOnly: boolean;
 }
 
 interface LayerTogglesProps {
@@ -15,6 +16,7 @@ const ROWS: Array<{ k: keyof LayerTogglesValue; lbl: string }> = [
   { k: "deserts", lbl: "Severe-gap markers" },
   { k: "pins", lbl: "District bubbles" },
   { k: "labels", lbl: "Labels" },
+  { k: "verifiedOnly", lbl: "Verified facilities only" },
 ];
 
 function swatchBackground(k: keyof LayerTogglesValue): string {
@@ -23,6 +25,7 @@ function swatchBackground(k: keyof LayerTogglesValue): string {
   if (k === "deserts")
     return "repeating-linear-gradient(45deg, #C04A3F 0 2px, transparent 2px 5px)";
   if (k === "pins") return "#BFA46A";
+  if (k === "verifiedOnly") return "#34C58A";
   return "var(--fg-3)";
 }
 

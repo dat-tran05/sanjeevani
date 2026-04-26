@@ -71,11 +71,17 @@ def model_proposal(slot: str, model: str, vendor: str, content: str) -> StreamEv
 
 
 def jury_verdict(claim_id: str, claim_text: str, judges: list[dict],
-                 agreement: dict, final_verdict: str) -> StreamEvent:
-    return StreamEvent(type=EventType.JURY_VERDICT, data={
+                 agreement: dict, final_verdict: str,
+                 facility_id: str = "", facility_name: str = "") -> StreamEvent:
+    data: dict[str, Any] = {
         "claim_id": claim_id, "claim_text": claim_text,
         "judges": judges, "agreement": agreement, "final_verdict": final_verdict,
-    })
+    }
+    if facility_id:
+        data["facility_id"] = facility_id
+    if facility_name:
+        data["facility_name"] = facility_name
+    return StreamEvent(type=EventType.JURY_VERDICT, data=data)
 
 
 def tiebreaker_resolved(claim_id: str, model: str, rationale: str, final_verdict: str) -> StreamEvent:

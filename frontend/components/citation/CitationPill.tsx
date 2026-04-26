@@ -23,11 +23,21 @@ export function CitationPill({ citation, active = false, onClick }: CitationPill
       </svg>
       <span>{citation.id}</span>
       <span className="citation-tooltip">
-        <div className="src-meta">
-          {citation.facility_id} · {citation.column} · char {citation.char_start}–{citation.char_end}
-        </div>
+        <div className="src-meta">Source quote · {citation.column}</div>
         <div className="src-text">
-          …<mark>{citation.text}</mark>…
+          &ldquo;<mark>{citation.text}</mark>&rdquo;
+        </div>
+        <div
+          style={{
+            marginTop: 6,
+            fontFamily: "var(--mono)",
+            fontSize: 9,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: "var(--gold)",
+          }}
+        >
+          ↗ Click to open evidence
         </div>
       </span>
     </span>

@@ -8,7 +8,12 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  position: relative;
+  /* Stick to the top of the viewport (under the 52px app header) so the
+     trace stays pinned as the user scrolls the explorer page. */
+  position: sticky;
+  top: 52px;
+  height: calc(100vh - 52px);
+  align-self: start;
 }
 
 .trace-head {

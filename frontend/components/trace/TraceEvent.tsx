@@ -8,6 +8,9 @@ import { AnswerReadyNode } from "./AnswerReadyNode";
 interface TraceEventProps {
   event: StreamEvent;
   finished: boolean;
+  /** 1-based index among consecutive consensus_resolved events (for "Jury verdict N of M"). */
+  juryIndex?: number;
+  juryTotal?: number;
 }
 
 /**
@@ -19,14 +22,14 @@ interface TraceEventProps {
  * text_delta and citation render in the Explorer's main column, not the trace
  * panel — they short-circuit here.
  */
-export function TraceEvent({ event, finished }: TraceEventProps) {
+export function TraceEvent({ event, finished, juryIndex, juryTotal }: TraceEventProps) {
   switch (event.type) {
     case "thinking_delta":
       return <ThinkingNode event={event} finished={finished} />;
     case "tool_call":
       return <ToolCallNode event={event} finished={finished} />;
     case "consensus_resolved":
-      return <JuryPanel event={event} />;
+      return <JuryPanel event={event} index={juryIndex} total={juryTotal} />;
     case "validator_pass":
       return <ValidatorNode event={event} />;
     case "recommendations_ready":

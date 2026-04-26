@@ -11,8 +11,8 @@ import { WhyNotThese } from "@/components/explorer/WhyNotThese";
 import { TraceStream } from "@/components/trace/TraceStream";
 import { useEventStream } from "@/lib/hooks/use-event-stream";
 import { useDrawer } from "@/lib/hooks/use-drawer";
+import { setLiveFacilities } from "@/lib/live-facilities-store";
 import { HERO_QUERIES } from "@/lib/demo/hero-queries";
-import { FACILITIES, HERO_FACILITY_IDS } from "@/lib/demo/facilities";
 import type { FacilityCitation, HeroQuery, RecommendedFacility } from "@/lib/types";
 
 function ExplorerInner() {
@@ -36,10 +36,12 @@ function ExplorerInner() {
     return [fromAtlas, ...HERO_QUERIES];
   }, [urlQuery]);
 
-  // First-paint pin: if there's a from-atlas entry, it leads. The component
-  // is keyed on `?q=` by ExplorerKeyed below, so URL changes remount the
-  // tree and re-run this initializer with fresh queries.
-  const [activeQueryId, setActiveQueryId] = useState(queries[0]?.id ?? "");
+  const initial = queries[0];
+  // `activeQueryId` is only used to look up the demo answerLine for the chip
+  // the user explicitly picked. Free-form queries leave it on the last chip
+  // (or empty) and the answerLine fallback for them is handled below.
+  const [activeQueryId, setActiveQueryId] = useState(initial?.id ?? "");
+  const [pendingText, setPendingText] = useState(initial?.text ?? "");
 
   const { events, run } = useEventStream({ forceDemo, speed });
   const { openDrawer } = useDrawer();
@@ -47,28 +49,50 @@ function ExplorerInner() {
   const activeQuery =
     queries.find((q) => q.id === activeQueryId) ?? queries[0];
 
+  // Fire on mount + whenever pendingText changes (chip click or Enter key).
   useEffect(() => {
-    if (activeQuery) void run(activeQuery.text);
-    // re-run only when active query id changes
+    if (pendingText) void run(pendingText);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeQueryId, forceDemo, speed]);
+  }, [pendingText, forceDemo, speed]);
 
-  // Prefer live recommendations if the backend emitted them; otherwise the
-  // demo fallback (or baked HERO_FACILITY_IDS for first paint).
+  // Prefer live recommendations if the backend emitted them. In `?demo=1`
+  // mode the demo fallback inside useEventStream synthesizes
+  // recommendations_ready, so we fall back to bundled FACILITIES only as a
+  // final safety net (when the demo trace is also missing).
   const recsEvent = events.find((te) => te.ev.type === "recommendations_ready");
-  const liveFacilities: RecommendedFacility[] =
-    recsEvent && recsEvent.ev.type === "recommendations_ready"
-      ? recsEvent.ev.data.facilities
-      : HERO_FACILITY_IDS.map((id) => FACILITIES[id]).filter(
-          (f): f is RecommendedFacility => Boolean(f)
-        );
+  const recsData =
+    recsEvent && recsEvent.ev.type === "recommendations_ready" ? recsEvent.ev.data : null;
+  const liveFacilities: RecommendedFacility[] = recsData?.facilities ?? [];
+  const liveExclusions = recsData?.excluded;
+
+  // Concatenate streamed text_delta chunks — backend's emit node sends the
+  // aggregator's synthesized prose paragraph in word-sized chunks.
+  const liveProse = events
+    .filter((te) => te.ev.type === "text_delta")
+    .map((te) => (te.ev.type === "text_delta" ? te.ev.data.text : ""))
+    .join("")
+    .trim();
+  // First paint shows nothing for prose so demo content doesn't flash.
+  // After stream completes, fall back to the chip answerLine if the live
+  // text was empty (off-script queries).
+  const recsArrived = !!recsData;
+  const synthesizedProse = liveProse || (recsArrived ? activeQuery?.answerLine || "" : "");
+
+  // While the live stream is in progress, show no cards yet (avoid the
+  // confusing "demo cards then live cards" flash). In demo mode the demo
+  // fallback emits recommendations_ready immediately so cards appear.
+  const showCards = liveFacilities.length > 0;
+  const showCardsPlaceholder = !showCards;
+
+  // Publish the live cards to the module-level store so the FacilityDrawer
+  // can render their description + citations + capabilities (the data the
+  // /facilities/{id} endpoint doesn't carry).
+  useEffect(() => {
+    if (liveFacilities.length > 0) setLiveFacilities(liveFacilities);
+  }, [liveFacilities]);
 
   const onCitationClick = (facilityId: string, citation: FacilityCitation) => {
     openDrawer(facilityId, citation.id);
-  };
-
-  const onReplay = () => {
-    if (activeQuery) void run(activeQuery.text);
   };
 
   return (
@@ -77,29 +101,49 @@ function ExplorerInner() {
       <div className="explorer-main">
         <QueryBlock
           queries={queries}
-          activeQueryId={activeQueryId}
-          onQueryChange={setActiveQueryId}
-          onReplay={onReplay}
+          pendingText={pendingText}
+          onSubmit={(text) => setPendingText(text)}
+          onPickChip={(id) => setActiveQueryId(id)}
         />
         <div className="result-section">
           <ResultEyebrow
             label="Synthesized answer"
             count={`${liveFacilities.length} verified`}
           />
-          <AnswerProse>{activeQuery?.answerLine}</AnswerProse>
+          <AnswerProse>{synthesizedProse}</AnswerProse>
 
           <ResultEyebrow label="Ranked recommendations" />
-          {liveFacilities.map((f, i) => (
-            <RecommendationCard
-              key={f.id}
-              facility={f}
-              rank={i + 1}
-              onCitationClick={onCitationClick}
-              onOpen={(id) => openDrawer(id)}
-            />
-          ))}
+          {showCards ? (
+            liveFacilities.map((f, i) => (
+              <RecommendationCard
+                key={f.id}
+                facility={f}
+                rank={i + 1}
+                onCitationClick={onCitationClick}
+                onOpen={(id) => openDrawer(id)}
+              />
+            ))
+          ) : null}
+          {showCardsPlaceholder && (
+            <div
+              style={{
+                padding: "32px 20px",
+                border: "1px dashed var(--line)",
+                borderRadius: 12,
+                color: "var(--fg-mute)",
+                fontSize: 13,
+                textAlign: "center",
+                fontFamily: "var(--mono)",
+                letterSpacing: "0.04em",
+              }}
+            >
+              Pipeline running · ranked cards appear when the validator approves the citations
+            </div>
+          )}
 
-          <WhyNotThese />
+          {(showCards || liveExclusions) && (
+            <WhyNotThese exclusions={liveExclusions} />
+          )}
 
           <div
             style={{

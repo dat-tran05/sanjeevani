@@ -16,9 +16,10 @@ export interface TaggedEvent {
 
 export interface UseEventStreamOptions {
   /**
-   * If the live stream finishes (or 8s elapse) without any of the four
-   * fallback-required events, demo-trace events for the missing types are
-   * appended. Override the elapsed time here.
+   * If after this long the live stream has emitted ZERO events, the backend
+   * is treated as unreachable and the demo trace plays. Once any live event
+   * arrives, this timeout no-ops — gap-filling is handled by the
+   * post-stream-end check instead. Default 8000ms.
    */
   fallbackTimeoutMs?: number;
   /** When true (e.g. ?demo=1 query param), skip live fetch entirely. */
@@ -89,7 +90,15 @@ export function useEventStream(opts: UseEventStreamOptions = {}): UseEventStream
       let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
       try {
-        fallbackTimer = setTimeout(() => playDemoFallback(true), fallbackTimeoutMs);
+        // Only fire fallback if the backend is silent (zero live events
+        // by `fallbackTimeoutMs`). Once any live event arrives, the timer
+        // is a no-op — long-running streams (e.g. 110s pipeline) shouldn't
+        // get demo events spliced in mid-flight.
+        fallbackTimer = setTimeout(() => {
+          if (seenTypes.current.size === 0) {
+            playDemoFallback(true);
+          }
+        }, fallbackTimeoutMs);
         for await (const ev of streamQuery(query)) {
           append(ev, "live");
         }

@@ -86,6 +86,37 @@ def _parse_ranking(raw: str) -> tuple[str, list[str]]:
         return raw.strip(), []
 
 
+def _summarize_proposer(raw: str, name_by_id: dict[str, str]) -> str:
+    """Turn a proposer's raw JSON output into a short trace-friendly summary
+    using facility NAMES instead of hash IDs. Falls back to truncated raw
+    text on parse failure.
+    """
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    text = text.strip()
+    try:
+        parsed = json.loads(text)
+        top = parsed.get("top") or []
+        if not top:
+            raise ValueError("empty top")
+        bits = []
+        for t in top[:3]:
+            fid = t.get("facility_id", "")
+            rank = t.get("rank", "?")
+            nm = name_by_id.get(fid) or (fid[:8] + "…" if fid else "(unknown)")
+            bits.append(f"{nm} (rank {rank})")
+        flags = parsed.get("flags") or []
+        flag = (flags[0] if flags else (top[0].get("rationale") or ""))[:240]
+        flag = flag.rstrip(".") + "." if flag else ""
+        return f"Recommends {', '.join(bits)}." + (f" {flag}" if flag else "")
+    except Exception:
+        flat = " ".join(raw.split())
+        return flat[:280] + ("…" if len(flat) > 280 else "")
+
+
 def moa_propose_node(intent: QueryIntent, reranked: list[RankedFacility]
                      ) -> Iterator[StreamEvent | tuple[str, AgentState]]:
     yield agent_step_start("moa_propose", label="Two proposers ran in parallel")
@@ -107,9 +138,14 @@ def moa_propose_node(intent: QueryIntent, reranked: list[RankedFacility]
         "B": Proposal(slot="B", model=get_llama_endpoint(), vendor="meta",
                       content=b_text, ranking=b_ranking),
     }
-    # Emit proposals as side-by-side panels
-    yield model_proposal("A", proposals["A"].model, proposals["A"].vendor, proposals["A"].content)
-    yield model_proposal("B", proposals["B"].model, proposals["B"].vendor, proposals["B"].content)
+    # Emit proposals as side-by-side panels — use a NAME-based short summary
+    # for the trace UI (the full raw JSON is preserved in `proposals` for the
+    # aggregator to consume downstream).
+    name_by_id = {r.facility_id: r.name for r in reranked}
+    a_short = _summarize_proposer(a_text, name_by_id)
+    b_short = _summarize_proposer(b_text, name_by_id)
+    yield model_proposal("A", proposals["A"].model, proposals["A"].vendor, a_short)
+    yield model_proposal("B", proposals["B"].model, proposals["B"].vendor, b_short)
     latency = int((time.perf_counter() - started) * 1000)
     yield agent_step_end("moa_propose", latency_ms=latency)
     yield ("done", {"proposals": proposals})

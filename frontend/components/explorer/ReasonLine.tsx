@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { CitationPill } from "@/components/citation/CitationPill";
 import type { FacilityCitation, RecommendedFacility } from "@/lib/types";
 
@@ -8,7 +9,61 @@ interface ReasonLineProps {
   onCitationClick: (facilityId: string, citation: FacilityCitation) => void;
 }
 
+/**
+ * Renders the live backend prose, splicing each `{cN}` marker with the
+ * matching CitationPill. Backend's aggregator emits prose like:
+ *   "...described as an {c1} \"24x7 services\"..."
+ * Returns null if there's no prose or no markers parsed — caller falls back
+ * to the hardcoded demo lines below.
+ */
+/** Removes user-hostile internal IDs from a chunk of literal text:
+ * - "(cap_es_F-A2E0F20C)" claim_id parentheticals
+ * - bare hash facility IDs F-XXXXXXXX
+ */
+function cleanText(s: string): string {
+  return s
+    .replace(/\s*\((?:claim_id|cap)[_:][^)]*\)/g, "")
+    .replace(/\s*\((cap_[a-z0-9_]+)\)/gi, "")
+    .replace(/\s*\b(F-[A-F0-9]{6,})\b/g, "")
+    .replace(/\s+([.,;:])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ");
+}
+
+function renderLiveProse(
+  facility: RecommendedFacility,
+  onCitationClick: (facilityId: string, citation: FacilityCitation) => void
+): React.ReactNode | null {
+  const prose = facility.prose;
+  if (!prose) return null;
+  const byId = new Map(facility.citations.map((c) => [c.id, c]));
+  // Split on {cN} or {{cN}} markers, capturing the id.
+  const parts = prose.split(/\{\{?(c\d+)\}\}?/g);
+  if (parts.length === 1) {
+    return <span>{cleanText(prose)}</span>;
+  }
+  return (
+    <span>
+      {parts.map((part, i) => {
+        // Even indices = literal text; odd indices = captured citation id.
+        if (i % 2 === 0) return <React.Fragment key={i}>{cleanText(part)}</React.Fragment>;
+        const cit = byId.get(part);
+        if (!cit) return null;
+        return (
+          <CitationPill
+            key={i}
+            citation={{ ...cit, facility_id: facility.id }}
+            onClick={(c) => onCitationClick(facility.id, c)}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
 export function ReasonLine({ facility, onCitationClick }: ReasonLineProps) {
+  const live = renderLiveProse(facility, onCitationClick);
+  if (live) return live;
+
   if (facility.id === "F-MZN-0214") {
     return (
       <span>

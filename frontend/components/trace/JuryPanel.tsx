@@ -4,6 +4,10 @@ type ConsensusEvent = Extract<StreamEvent, { type: "consensus_resolved" }>;
 
 interface JuryPanelProps {
   event: ConsensusEvent;
+  /** 1-based ordinal among consecutive jury panels in the trace. */
+  index?: number;
+  /** Total jury panels in this trace (for "1 of 3"). */
+  total?: number;
 }
 
 const VERDICT_LABEL: Record<"supported" | "partial" | "unsupported", string> = {
@@ -19,15 +23,19 @@ const VERDICT_LABEL: Record<"supported" | "partial" | "unsupported", string> = {
  *   - 3-column grid of judges, dissenting columns glow crimson;
  *   - optional tiebreaker row when all 3 initially disagreed.
  */
-export function JuryPanel({ event }: JuryPanelProps) {
+export function JuryPanel({ event, index, total }: JuryPanelProps) {
   const d = event.data;
   const segs = [0, 1, 2].map((i) => i < d.agreement);
   const dissentSegs = d.dissent ? 3 - d.agreement : 0;
+  const ordinal =
+    index && total && total > 1
+      ? `Jury verdict ${index} of ${total} · 3 judges`
+      : "Jury · 3 judges";
 
   return (
     <div className="trace-event">
       <div className={"node " + (d.dissent ? "dissent" : "done")} />
-      <div className="label">Jury · 3 judges</div>
+      <div className="label">{ordinal}</div>
       <div className="jury-panel">
         <div className="jury-head">
           <div className="top">

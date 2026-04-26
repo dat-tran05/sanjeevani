@@ -35,6 +35,7 @@ interface LayerState {
   pins: boolean;
   labels: boolean;
   deserts: boolean;
+  verifiedOnly: boolean;
 }
 
 const INITIAL_LAYERS: LayerState = {
@@ -42,6 +43,7 @@ const INITIAL_LAYERS: LayerState = {
   pins: true,
   labels: true,
   deserts: true,
+  verifiedOnly: false,
 };
 
 function AtlasInner() {

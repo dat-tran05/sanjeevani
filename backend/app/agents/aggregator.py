@@ -271,6 +271,38 @@ def aggregator_node_streaming(intent: QueryIntent, proposals: dict[str, Proposal
         escalate_claims=list(parsed.get("escalate_claims", []) or []),
     )
 
+    # Synthesize a structured one-line summary for the trace UI:
+    #   "Synthesized: top 3 = X, Y, Z. <agreement note>"
+    proposer_a_top: list[str] = []
+    proposer_b_top: list[str] = []
+    for slot, lst in [("A", proposer_a_top), ("B", proposer_b_top)]:
+        try:
+            raw = proposals[slot].content
+            stripped = raw.strip()
+            if stripped.startswith("```"):
+                stripped = stripped.split("```")[1]
+                if stripped.startswith("json"):
+                    stripped = stripped[4:]
+            inner = json.loads(stripped.strip())
+            for t in (inner.get("top") or [])[:3]:
+                lst.append(t.get("facility_id", ""))
+        except Exception:
+            pass
+    rank1_agree = (proposer_a_top[:1] == proposer_b_top[:1] and proposer_a_top[:1])
+    set_a, set_b = set(proposer_a_top[:3]), set(proposer_b_top[:3])
+    overlap = len(set_a & set_b)
+
+    top_names = ", ".join(c.name for c in cards[:3]) or "(none)"
+    if rank1_agree and overlap == 3:
+        agree_note = "Both proposers fully agreed."
+    elif rank1_agree:
+        agree_note = f"Both proposers agreed on rank 1; ranks 2–3 reconciled ({overlap}/3 overlap)."
+    elif overlap >= 2:
+        agree_note = f"Proposers diverged on rank 1; reconciled ({overlap}/3 overlap)."
+    else:
+        agree_note = f"Proposers diverged substantially ({overlap}/3 overlap); aggregator chose synthesis."
+    summary = f"Synthesized: top 3 = {top_names}. {agree_note}"
+
     latency = int((time.perf_counter() - started) * 1000)
-    yield agent_step_end("aggregator", latency_ms=latency)
+    yield agent_step_end("aggregator", latency_ms=latency, label=summary)
     yield ("done", {"aggregated": aggregated})

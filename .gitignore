@@ -24,3 +24,6 @@ frontend/.env
 
 # Sanity venv
 .venv-sanity/
+
+# Playwright MCP artifacts
+.playwright-mcp/

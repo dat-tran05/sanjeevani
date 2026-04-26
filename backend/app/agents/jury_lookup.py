@@ -54,9 +54,10 @@ def jury_lookup_node(aggregated: AggregatedRanking
     sql_started = time.perf_counter()
     rows = query(f"""
         SELECT v.claim_id, v.judge_model, v.judge_vendor, v.verdict, v.confidence, v.quote,
-               c.claim_text
+               c.claim_text, c.facility_id, p.name AS facility_name
         FROM sanjeevani.gold.trust_verdicts v
         JOIN sanjeevani.silver.facility_claims c USING (claim_id)
+        LEFT JOIN sanjeevani.silver.facilities_parsed p ON p.facility_id = c.facility_id
         WHERE v.claim_id IN ({placeholders})
         ORDER BY v.claim_id, v.judge_model
     """)
@@ -71,7 +72,12 @@ def jury_lookup_node(aggregated: AggregatedRanking
     by_claim: dict[str, dict] = {}
     for r in rows:
         cid = r["claim_id"]
-        entry = by_claim.setdefault(cid, {"claim_text": r["claim_text"], "judges": []})
+        entry = by_claim.setdefault(cid, {
+            "claim_text": r["claim_text"],
+            "facility_id": r.get("facility_id") or "",
+            "facility_name": r.get("facility_name") or "",
+            "judges": [],
+        })
         entry["judges"].append(JudgeVerdict(
             model=r["judge_model"], vendor=r["judge_vendor"],
             verdict=r["verdict"], confidence=float(r["confidence"]),
@@ -88,6 +94,7 @@ def jury_lookup_node(aggregated: AggregatedRanking
         jv = JuryVerdict(
             claim_id=cid, claim_text=entry["claim_text"], judges=judges,
             agreement_count=agree, dissent_count=dissent, final_verdict=final,
+            facility_id=entry["facility_id"], facility_name=entry["facility_name"],
         )
         jury_results.append(jv)
         # Emit, then sleep so the trace animates
@@ -96,6 +103,7 @@ def jury_lookup_node(aggregated: AggregatedRanking
             judges=[j.model_dump() for j in jv.judges],
             agreement={"agree": jv.agreement_count, "dissent": jv.dissent_count},
             final_verdict=jv.final_verdict,
+            facility_id=jv.facility_id, facility_name=jv.facility_name,
         )
         time.sleep(REPLAY_DELAY_S)
 

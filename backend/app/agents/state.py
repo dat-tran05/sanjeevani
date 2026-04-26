@@ -115,6 +115,8 @@ class JuryVerdict(BaseModel):
     agreement_count: int
     dissent_count: int
     final_verdict: str
+    facility_id: str = ""
+    facility_name: str = ""
 
 
 class Tiebreaker(BaseModel):

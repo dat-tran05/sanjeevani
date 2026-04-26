@@ -172,7 +172,10 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "ss01", "cv11", "tnum" 0;
-  overflow: hidden;
+  /* Allow page-level scroll. Per-route layouts (atlas) override this back
+     to overflow:hidden when a fixed-viewport experience is required. */
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 button {

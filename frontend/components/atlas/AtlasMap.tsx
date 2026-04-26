@@ -39,6 +39,34 @@ const FACILITY_COLOR_BY_TYPE: Record<string, [number, number, number, number]> =
   other:    [120, 130, 140, 180],
 };
 
+function buildFacilityLayer(
+  data: MapFacility[],
+  openDrawerRef: React.MutableRefObject<(id: string) => void>,
+): ScatterplotLayer<MapFacility> {
+  return new ScatterplotLayer<MapFacility>({
+    id: "facility-pins",
+    data,
+    getPosition: (f: MapFacility) => [f.lng, f.lat],
+    getRadius: 1500,
+    radiusUnits: "meters",
+    radiusMinPixels: 1.5,
+    radiusMaxPixels: 6,
+    stroked: true,
+    lineWidthMinPixels: 0.5,
+    getLineColor: [11, 20, 23, 220],
+    getFillColor: (f: MapFacility) =>
+      FACILITY_COLOR_BY_TYPE[f.type] ?? FACILITY_COLOR_BY_TYPE.other,
+    pickable: true,
+    autoHighlight: true,
+    highlightColor: [212, 164, 106, 240],
+    onClick: (info: PickingInfo<MapFacility>) => {
+      if (info.object) {
+        openDrawerRef.current(info.object.id);
+      }
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -64,6 +92,7 @@ export interface AtlasLayerToggles {
   pins: boolean;
   labels: boolean;
   deserts: boolean;
+  verifiedOnly: boolean;
 }
 
 export interface AtlasMapProps {
@@ -89,6 +118,8 @@ export function AtlasMap({
 }: AtlasMapProps): React.ReactElement {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const overlayRef = useRef<MapboxOverlay | null>(null);
+  const facilitiesRef = useRef<MapFacility[]>([]);
 
   const { openDrawer } = useDrawer();
 
@@ -142,33 +173,12 @@ export function AtlasMap({
       try {
         const res = await fetch("/facilities.min.json");
         const facilities = (await res.json()) as MapFacility[];
+        facilitiesRef.current = facilities;
         const overlay = new MapboxOverlay({
           interleaved: true,
-          layers: [
-            new ScatterplotLayer<MapFacility>({
-              id: "facility-pins",
-              data: facilities,
-              getPosition: (f: MapFacility) => [f.lng, f.lat],
-              getRadius: 1500,
-              radiusUnits: "meters",
-              radiusMinPixels: 1.5,
-              radiusMaxPixels: 6,
-              stroked: true,
-              lineWidthMinPixels: 0.5,
-              getLineColor: [11, 20, 23, 220],
-              getFillColor: (f: MapFacility) =>
-                FACILITY_COLOR_BY_TYPE[f.type] ?? FACILITY_COLOR_BY_TYPE.other,
-              pickable: true,
-              autoHighlight: true,
-              highlightColor: [212, 164, 106, 240],
-              onClick: (info: PickingInfo<MapFacility>) => {
-                if (info.object) {
-                  openDrawerRef.current(info.object.id);
-                }
-              },
-            }),
-          ],
+          layers: [buildFacilityLayer(facilities, openDrawerRef)],
         });
+        overlayRef.current = overlay;
         map.addControl(overlay);
       } catch (err) {
         console.warn("[atlas] failed to load facility pins", err);
@@ -354,6 +364,19 @@ export function AtlasMap({
       // Layers may not be added yet — first 'load' will run effect 2 next.
     }
   }, [layers]);
+
+  // -------------------------------------------------------------------------
+  // Effect 3b — re-build the facility ScatterplotLayer when verifiedOnly
+  // toggles. We swap the data array and call setProps so deck.gl re-renders
+  // without recreating the overlay.
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    const all = facilitiesRef.current;
+    if (!overlay || all.length === 0) return;
+    const filtered = layers.verifiedOnly ? all.filter((f) => f.verified) : all;
+    overlay.setProps({ layers: [buildFacilityLayer(filtered, openDrawerRef)] });
+  }, [layers.verifiedOnly]);
 
   // -------------------------------------------------------------------------
   // Effect 4 — keep the selected-district filter in sync if the parent

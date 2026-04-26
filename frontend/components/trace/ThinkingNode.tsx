@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { StreamEvent } from "@/lib/sse";
 
 type ThinkingEvent = Extract<StreamEvent, { type: "thinking_delta" }>;
 
 interface ThinkingNodeProps {
-  event: ThinkingEvent;
+  /** Single event (legacy) or list of consecutive deltas to concat. */
+  event?: ThinkingEvent;
+  events?: ThinkingEvent[];
   finished: boolean;
   /** Display label for the block; defaults to "Reasoning". */
   label?: string;
@@ -18,40 +20,36 @@ interface ThinkingNodeProps {
  * Renders a Claude extended-thinking delta as a gray italic block with a
  * typewriter effect. When `finished`, the cursor disappears and the full
  * text is shown directly (no animation).
+ *
+ * Accepts either a single `event` or a list of consecutive `events` —
+ * TraceStream groups consecutive thinking_delta events into one node so
+ * the live stream's many small chunks coalesce into one reasoning block.
  */
 export function ThinkingNode({
   event,
+  events,
   finished,
   label = "Reasoning",
   durationMs,
 }: ThinkingNodeProps) {
-  const fullText = event.data.text;
-  // Animated text only updated by the typewriter interval; the rendered text
-  // is `fullText` once finished, so setState on finished isn't needed.
-  const [animated, setAnimated] = useState("");
+  const fullText = events
+    ? events.map((e) => e.data.text).join("")
+    : event?.data.text ?? "";
+  // Backend chunks thinking_delta into many tiny events. Each new chunk
+  // grows fullText, which would otherwise restart the typewriter from 0.
+  // Instead we render the full text immediately as it streams in — the
+  // backend's chunking IS the streaming animation.
+  const shown = fullText;
+  const showCursor = !finished;
 
-  useEffect(() => {
-    if (finished) return;
-    const dur = durationMs ?? Math.max(400, fullText.length * 12);
-    const speed = Math.max(8, Math.floor(dur / fullText.length));
-    // Animation always starts from `animated === ""` because each new
-    // thinking_delta event mounts a fresh ThinkingNode (TraceStream keys by
-    // event index), so no explicit reset is needed.
-    let i = 0;
-    const iv = setInterval(() => {
-      i += 2;
-      if (i >= fullText.length) {
-        setAnimated(fullText);
-        clearInterval(iv);
-      } else {
-        setAnimated(fullText.slice(0, i));
-      }
-    }, speed);
-    return () => clearInterval(iv);
-  }, [fullText, finished, durationMs]);
-
-  const shown = finished ? fullText : animated;
-  const showCursor = !finished && shown.length < fullText.length;
+  // Long reasoning blocks default to collapsed once the stream is done so
+  // the rest of the trace stays scannable. Live (un-finished) blocks always
+  // show fully — the typewriter is the visual point.
+  const COLLAPSE_THRESHOLD = 400;
+  const isLong = fullText.length > COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = finished && isLong && !expanded;
+  const display = collapsed ? shown.slice(0, COLLAPSE_THRESHOLD) + "…" : shown;
 
   return (
     <div className="trace-event">
@@ -65,9 +63,28 @@ export function ThinkingNode({
           {label}
         </div>
         <div className="text">
-          {shown}
+          {display}
           {showCursor && <span className="cursor" />}
         </div>
+        {finished && isLong && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            style={{
+              background: "none",
+              border: "none",
+              padding: "6px 0 0",
+              fontFamily: "var(--mono)",
+              fontSize: 10.5,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              color: "var(--gold)",
+              cursor: "pointer",
+            }}
+          >
+            {expanded ? "↑ Collapse" : "↓ Show all"}
+          </button>
+        )}
       </div>
     </div>
   );

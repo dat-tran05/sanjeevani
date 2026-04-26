@@ -8,11 +8,20 @@ import type { HeroQuery } from "@/lib/types";
 export const HERO_QUERIES: HeroQuery[] = [
   {
     id: "bihar-appendectomy",
-    label: "Rural Bihar · Emergency appendectomy",
-    text: "nearest rural Bihar facility for emergency appendectomy",
+    label: "Q1 · Rural Bihar · Emergency appendectomy",
+    text: "Find the nearest facility in rural Bihar that can perform an emergency appendectomy and typically leverages part-time doctors.",
     intent: { capability: "emergency_surgery", region: "Bihar", urgency: "emergent", radius_km: 80 },
     answerLine:
       "Three rural Bihar facilities are most likely to handle an emergency appendectomy tonight, ranked by verified capability and trust. The strongest candidate is in Muzaffarpur — three of three judges agree the description cites a 24-hour emergency theatre. The second carries a partial verdict; surgical capability is implied but not explicitly stated. The third is escalated to extended-thinking tiebreaker — Llama dissents on equipment specificity.",
+    activeRegion: "BR"
+  },
+  {
+    id: "bihar-icu-verify",
+    label: "Q2 · Bihar · 24/7 ICU verification",
+    text: "Which Bihar hospitals can I trust for round-the-clock ICU care? A lot of listings advertise 24/7 emergency or ICU service but I only want ones where the description actually backs it up.",
+    intent: { capability: "icu_24_7", region: "Bihar" },
+    answerLine:
+      "Several Bihar hospitals advertise 24/7 ICU service but only a handful have descriptions specific enough for the jury to verify. The top picks combine explicit ICU bed counts with corroborating staffing claims; weaker matches are surfaced separately with the dissent reason.",
     activeRegion: "BR"
   },
   {

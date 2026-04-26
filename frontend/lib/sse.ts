@@ -123,32 +123,12 @@ export function parseSSEFrame(frame: string): StreamEvent | null {
 
 /**
  * POST a query to the backend and yield SSE events as they arrive.
- * The hook layer (`useEventStream`) merges live + baked demo data.
+ * Delegates to the adapter in `lib/sse-adapter.ts`, which translates the
+ * backend's 14-event taxonomy (jury_verdict, ranked_card, exclusion, …)
+ * into the discriminated union the components consume (consensus_resolved,
+ * recommendations_ready, …).
  */
 export async function* streamQuery(query: string): AsyncGenerator<StreamEvent> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-  const resp = await fetch(`${apiUrl}/query`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
-  if (!resp.ok || !resp.body) {
-    throw new Error(`HTTP ${resp.status}`);
-  }
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let idx;
-    while ((idx = buffer.indexOf("\n\n")) !== -1) {
-      const frame = buffer.slice(0, idx);
-      buffer = buffer.slice(idx + 2);
-      const ev = parseSSEFrame(frame);
-      if (ev) yield ev;
-    }
-  }
+  const { streamFromBackend } = await import("@/lib/sse-adapter");
+  yield* streamFromBackend(query);
 }

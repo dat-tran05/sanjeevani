@@ -37,7 +37,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000", "http://127.0.0.1:3000",
+        "http://localhost:3001", "http://127.0.0.1:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,9 +71,15 @@ def query_endpoint(req: QueryRequest):
 @lru_cache(maxsize=1)
 def _all_facilities_payload() -> list[dict[str, Any]]:
     rows = db_query("""
-        SELECT facility_id, name, latitude, longitude, state, city, facility_type
-        FROM sanjeevani.silver.facilities_parsed
-        WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+        SELECT p.facility_id, p.name, p.latitude, p.longitude, p.state, p.city, p.facility_type,
+               (v.facility_id IS NOT NULL) AS verified
+        FROM sanjeevani.silver.facilities_parsed p
+        LEFT JOIN (
+            SELECT DISTINCT c.facility_id
+            FROM sanjeevani.silver.facility_claims c
+            JOIN sanjeevani.gold.trust_verdicts tv USING (claim_id)
+        ) v USING (facility_id)
+        WHERE p.latitude IS NOT NULL AND p.longitude IS NOT NULL
     """)
     return [
         {
@@ -78,6 +87,7 @@ def _all_facilities_payload() -> list[dict[str, Any]]:
             "lat": float(r["latitude"]), "lon": float(r["longitude"]),
             "state": r.get("state"), "city": r.get("city"),
             "type": r.get("facility_type"),
+            "verified": bool(r.get("verified")),
         }
         for r in rows
     ]

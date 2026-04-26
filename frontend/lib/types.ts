@@ -46,6 +46,23 @@ export interface RecommendedFacility {
   citations: FacilityCitation[];
   /** Full free-text description; citations index char offsets into this string. */
   description: string;
+  /**
+   * Optional 2-3 sentence rationale produced by the backend aggregator,
+   * containing inline `{c1}` / `{c2}` citation markers replaced at render
+   * time by the matching CitationPill. Absent on demo data — ReasonLine
+   * falls back to per-facility hardcoded prose for those.
+   */
+  prose?: string;
+  /** Source-CSV listed specialties (silver.facilities_parsed.specialties). */
+  specialties?: string[];
+  /** Source-CSV listed procedures. */
+  procedures?: string[];
+  /** Source-CSV listed equipment. */
+  equipment?: string[];
+  /** LLM-extracted: facility self-claims surgery capability. */
+  surgery_capable?: boolean | null;
+  /** LLM-extracted: facility self-claims 24/7 emergency. */
+  emergency_24_7?: boolean | null;
 }
 
 export interface ExcludedFacility {
@@ -59,16 +76,17 @@ export interface ExcludedFacility {
 
 /** Slim facility record used by the Atlas pin layer (deck.gl Scatterplot). */
 export interface MapFacility {
-  /** Synthetic id derived from the source CSV row index, e.g. "F00214". */
+  /** SHA256 facility_id from Databricks silver.facilities_parsed — joinable to /facilities/{id}. */
   id: string;
   name: string;
   lat: number;
   lng: number;
   state: string;
   city: string;
-  pincode: string;
   /** Normalized facility type: hospital | clinic | dentist | doctor | pharmacy | other. */
   type: string;
+  /** True if facility has ≥1 row in gold.trust_verdicts (multi-judge jury verified). */
+  verified?: boolean;
 }
 
 export interface DistrictPoint {

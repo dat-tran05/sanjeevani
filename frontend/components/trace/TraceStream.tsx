@@ -6,15 +6,18 @@ import type { TaggedEvent } from "@/lib/hooks/use-event-stream";
 import { TraceEvent } from "./TraceEvent";
 import { AgentStepNode } from "./AgentStepNode";
 import { ProposalsNode } from "./ProposalsNode";
+import { ThinkingNode } from "./ThinkingNode";
 
 type ModelProposalEv = Extract<StreamEvent, { type: "model_proposal" }>;
+type ThinkingDeltaEv = Extract<StreamEvent, { type: "thinking_delta" }>;
 type AgentStepStartEv = Extract<StreamEvent, { type: "agent_step_start" }>;
 type AgentStepEndEv = Extract<StreamEvent, { type: "agent_step_end" }>;
 
 type TraceItem =
   | { kind: "single"; ev: StreamEvent; finished: boolean; key: string; demo: boolean }
   | { kind: "agent_step"; start: AgentStepStartEv; end: AgentStepEndEv | null; key: string; demo: boolean }
-  | { kind: "proposals"; events: ModelProposalEv[]; key: string; demo: boolean };
+  | { kind: "proposals"; events: ModelProposalEv[]; key: string; demo: boolean }
+  | { kind: "thinking"; events: ThinkingDeltaEv[]; finished: boolean; key: string; demo: boolean };
 
 /**
  * Collapses the raw tagged-event list into render items:
@@ -22,6 +25,8 @@ type TraceItem =
  *     (single AgentStepNode that flips spinner→checkmark when end arrives);
  *   - consecutive model_proposal events grouped into one ProposalsNode
  *     (so the side-by-side A/B layout renders once both have arrived);
+ *   - consecutive thinking_delta events grouped into one ThinkingNode
+ *     (live backend chunks are 4-10 words each; grouping coalesces them);
  *   - text_delta / citation skipped (rendered in the main column).
  */
 function buildItems(events: TaggedEvent[]): TraceItem[] {
@@ -58,6 +63,21 @@ function buildItems(events: TaggedEvent[]): TraceItem[] {
         j++;
       }
       items.push({ kind: "proposals", events: group, key: `props-${i}`, demo });
+      i = j - 1;
+      continue;
+    }
+
+    if (ev.type === "thinking_delta") {
+      const group: ThinkingDeltaEv[] = [ev];
+      let j = i + 1;
+      while (j < events.length && events[j]!.ev.type === "thinking_delta") {
+        group.push(events[j]!.ev as ThinkingDeltaEv);
+        j++;
+      }
+      // Mark unfinished only if the thinking block is the most recent
+      // thing in the stream (i.e. the next event hasn't arrived yet).
+      const finished = j < events.length;
+      items.push({ kind: "thinking", events: group, finished, key: `think-${i}`, demo });
       i = j - 1;
       continue;
     }
@@ -104,18 +124,37 @@ export function TraceStream({ events, totalExpected }: TraceStreamProps) {
         </span>
       </div>
       <div className="trace-stream" ref={ref} aria-live="polite" aria-atomic="false">
-        {items.map((item) => {
-          const node =
-            item.kind === "agent_step" ? (
-              <AgentStepNode
-                event={item.end ?? item.start}
-                finished={!!item.end}
-              />
-            ) : item.kind === "proposals" ? (
-              <ProposalsNode events={item.events} />
-            ) : (
-              <TraceEvent event={item.ev} finished={item.finished} />
-            );
+        {(() => {
+          // Pre-compute total + per-item index for consensus_resolved so
+          // JuryPanel can render "Jury verdict 1 of N".
+          const juryTotal = items.filter(
+            (it) => it.kind === "single" && it.ev.type === "consensus_resolved"
+          ).length;
+          let juryIdx = 0;
+          return items.map((item) => {
+            let juryProps: { index: number; total: number } | undefined;
+            if (item.kind === "single" && item.ev.type === "consensus_resolved") {
+              juryIdx += 1;
+              juryProps = { index: juryIdx, total: juryTotal };
+            }
+            const node =
+              item.kind === "agent_step" ? (
+                <AgentStepNode
+                  event={item.end ?? item.start}
+                  finished={!!item.end}
+                />
+              ) : item.kind === "proposals" ? (
+                <ProposalsNode events={item.events} />
+              ) : item.kind === "thinking" ? (
+                <ThinkingNode events={item.events} finished={item.finished} />
+              ) : (
+                <TraceEvent
+                  event={item.ev}
+                  finished={item.finished}
+                  juryIndex={juryProps?.index}
+                  juryTotal={juryProps?.total}
+                />
+              );
 
           if (isDev && item.demo) {
             return (
@@ -144,8 +183,9 @@ export function TraceStream({ events, totalExpected }: TraceStreamProps) {
             );
           }
 
-          return <span key={item.key}>{node}</span>;
-        })}
+            return <span key={item.key}>{node}</span>;
+          });
+        })()}
       </div>
     </div>
   );

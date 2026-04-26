@@ -7,6 +7,9 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 360px;
   overflow: hidden;
+  /* Fixed-viewport experience — atlas opts out of the page-level scroll
+     enabled by the global body { overflow-y: auto } default. */
+  height: calc(100vh - 52px);
 }
 .atlas-stage {
   position: relative;
