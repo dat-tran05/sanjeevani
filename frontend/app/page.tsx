@@ -1,17 +1,18 @@
-import { Chat } from "@/components/chat/Chat";
+import { Suspense } from "react";
+import { TopoBg } from "@/components/shell/TopoBg";
+import { SplashHero } from "@/components/splash/SplashHero";
+import { SplashVisual } from "@/components/splash/SplashVisual";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen bg-slate-50">
-      <div className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <h1 className="text-xl font-semibold">Sanjeevani</h1>
-          <p className="text-sm text-slate-500">
-            Agentic healthcare intelligence for India
-          </p>
-        </div>
+    <div className="splash">
+      <TopoBg />
+      <div className="splash-canvas">
+        <SplashHero />
+        <Suspense fallback={<div className="splash-visual" />}>
+          <SplashVisual />
+        </Suspense>
       </div>
-      <Chat />
-    </main>
+    </div>
   );
 }

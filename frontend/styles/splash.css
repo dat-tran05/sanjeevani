@@ -1,0 +1,145 @@
+/* Sanjeevani — splash (hero, eyebrow, headline, stats, india-svg) */
+/* ========================================================================
+   Splash
+   ====================================================================== */
+.splash {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.splash-canvas {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  position: relative;
+  z-index: 1;
+}
+
+.splash-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 64px 80px 80px;
+  position: relative;
+}
+
+.splash-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  margin-bottom: 32px;
+}
+.splash-eyebrow .line {
+  width: 28px;
+  height: 1px;
+  background: var(--gold);
+}
+
+.splash-headline {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(56px, 7vw, 104px);
+  line-height: 0.95;
+  letter-spacing: -0.025em;
+  color: var(--fg);
+  margin: 0 0 28px;
+  text-wrap: pretty;
+}
+.splash-headline em {
+  font-style: italic;
+  color: var(--gold);
+  font-weight: 300;
+}
+.splash-headline .green { color: var(--green); font-style: italic; font-weight: 300; }
+
+.splash-tag {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: 22px;
+  color: var(--fg-2);
+  margin: 0 0 36px;
+  max-width: 520px;
+  line-height: 1.4;
+}
+
+.splash-cta-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 56px;
+}
+
+.splash-stats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 32px;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  max-width: 640px;
+}
+.splash-stat-num {
+  font-family: var(--display);
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.splash-stat-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+
+/* Splash visual side — stylized India outline */
+.splash-visual {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-left: 1px solid var(--line);
+  background: linear-gradient(135deg, transparent 0%, var(--neutral-03) 100%);
+  overflow: hidden;
+}
+
+.splash-visual .corner-mark {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+
+.splash-visual .india-svg {
+  width: 78%;
+  height: auto;
+  max-width: 520px;
+  filter: drop-shadow(0 0 60px rgba(43, 182, 115, 0.12));
+}
+
+.splash-visual .india-svg .pin {
+  fill: var(--green);
+  opacity: 0;
+  animation: pin-light 1.4s var(--ease-out) forwards;
+}
+
+@keyframes pin-light {
+  0% { opacity: 0; transform: scale(0.4); }
+  100% { opacity: 0.9; transform: scale(1); }
+}

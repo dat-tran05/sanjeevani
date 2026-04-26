@@ -1,0 +1,53 @@
+/* Sanjeevani — trust (4-bar trust badge, dim variants, label) */
+/* Trust badge — 4 vertical bars */
+.trust-badge {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.trust-badge.lg { height: 46px; gap: 4px; }
+.trust-bar {
+  width: 7px;
+  height: 100%;
+  background: var(--neutral-06);
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--neutral-10);
+}
+.trust-badge.lg .trust-bar { width: 12px; }
+.trust-bar .fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(180deg, var(--green-soft), var(--green));
+  border-top: 1px solid rgba(255,255,255,0.25);
+  transition: height var(--t-slow) var(--ease-out);
+}
+.trust-bar[data-dim="recency"] .fill { background: linear-gradient(180deg, #E8C58C, var(--gold)); }
+.trust-bar[data-dim="specificity"] .fill { background: linear-gradient(180deg, #6FCFA0, var(--green-deep)); }
+.trust-bar[data-dim="coherence"] .fill { background: linear-gradient(180deg, #82DDB1, var(--green)); }
+
+.trust-badge-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+  margin-left: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.trust-badge-label .num {
+  font-family: var(--display);
+  font-size: 18px;
+  color: var(--gold);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  font-weight: 500;
+  line-height: 1;
+}
