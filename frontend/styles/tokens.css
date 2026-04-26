@@ -53,10 +53,10 @@
   --fg-3: var(--neutral-60);
   --fg-mute: var(--neutral-40);
 
-  /* Type — bound to next/font variables in Task 3 */
-  --display: "Fraunces", "Tiempos Headline", Georgia, serif;
-  --sans: "Inter", "Söhne", system-ui, -apple-system, sans-serif;
-  --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* Type — bound to next/font/google variables (see app/layout.tsx) */
+  --display: var(--font-fraunces), "Tiempos Headline", Georgia, serif;
+  --sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --mono: var(--font-jetbrains-mono), "IBM Plex Mono", ui-monospace, Menlo, monospace;
 
   /* Motion */
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
