@@ -57,6 +57,20 @@ export interface ExcludedFacility {
   verdict: "partial" | "unsupported";
 }
 
+/** Slim facility record used by the Atlas pin layer (deck.gl Scatterplot). */
+export interface MapFacility {
+  /** Synthetic id derived from the source CSV row index, e.g. "F00214". */
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  state: string;
+  city: string;
+  pincode: string;
+  /** Normalized facility type: hospital | clinic | dentist | doctor | pharmacy | other. */
+  type: string;
+}
+
 export interface DistrictPoint {
   /** Short district id, e.g. "MZN". */
   id: string;
